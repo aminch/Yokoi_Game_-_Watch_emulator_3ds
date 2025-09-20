@@ -10,3 +10,6 @@ console_*.t3s
 romfs/gfx/*
 build/*
 source/std/GW_ROM/*
+
+CONVERT_ROM/tmp/img/*
+CONVERT_ROM/rom/*
