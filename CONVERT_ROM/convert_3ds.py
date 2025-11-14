@@ -3,13 +3,15 @@ import shutil
 from PIL import Image, ImageEnhance
 import numpy as np
 from rectpack import newPacker
+from multiprocessing import Pool
+import functools
 
 from source import convert_svg as cs
 from source import img_manipulation as im
 
 
 
-INKSCAPE_PATH = r"D:\Program Files\Inkscape\bin\inkscape.exe"
+INKSCAPE_PATH = r"C:\Program Files\Inkscape\bin\inkscape.exe"
 
 destination_file = r"..\source\std\GW_ALL.h"
 destination_game_file = r"..\source\std\GW_ROM"
@@ -31,9 +33,9 @@ default_fond_bright = 1.35
 default_rotate = False
 default_console = r'.\rom\default.png'
 
+from generated_games_path import games_path
 
-
-games_path = {
+games_path__ = {
               "ball" :
                     { "ref" : "ac-01"
                     , "display_name" : "Ball"
@@ -724,35 +726,8 @@ games_path = {
                     , "console" : r'.\rom\gnw_mariotj\gnw_mariotj.png'
                 }
               
-            , "Shuttle_Voyage" :
-                    { "ref" : "mg-8"
-                    , "display_name" : "Shuttle Voyage"
-                    , "date" : "1983-01-XX"
-                    , "Rom" : r'.\rom\trshutvoy\0019_238e'
-                    , "Visual" : [r'.\rom\trshutvoy\trshutvoy.svg']
-                    , "Background" : [r'.\rom\trshutvoy\BackgroundNS.png']
-                    , "transform_visual" : [[[1266, 28, 18], [835, 8, 32]]]
-                    , "console" : r'.\rom\trshutvoy\Unit.png'
-                }
               
 }
-
-
-games_path__________ = {
-              
-              "ball" :
-                    { "ref" : "ac-01"
-                    , "display_name" : "Ball"
-                    , "Rom" : r'.\rom\ball\ac-01'
-                    , "Visual" : [r'.\rom\ball\gnw_ball.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\ball\Background2NS.png']
-                    , "transform_visual" : [[[2242, 121, 121], [1449, 69, 88]]]
-                    , "date" : "1980-04-28"
-                    , "console" : r'.\rom\ball\gnw_ball.png'
-                }
-              
-}
-
 
 
 def sort_by_screen(name: str):
@@ -1133,6 +1108,46 @@ def validate_game_files(games_path):
         return True
 
 
+def process_single_game(args):
+    """Process a single game - designed for multiprocessing."""
+    key, game_data = args
+    
+    print(f"\n--------\n{key}\n")
+
+    if reset_img_svg:
+        try: 
+            shutil.rmtree("./tmp/img/" + key)
+        except: 
+            pass
+                
+    # Set default values if not exist
+    alpha_bright = game_data.get('alpha_bright', default_alpha_bright)
+    fond_bright = game_data.get('fond_bright', default_fond_bright)
+    rotate = game_data.get('rotate', default_rotate)
+    mask = game_data.get('mask', False)
+    color_segment = game_data.get('color_segment', False)
+    two_in_one_screen = game_data.get('2_in_one_screen', False)
+    melody_path = game_data.get('Melody_Rom', '')
+    background_path = game_data.get('Background', [])
+    size_visual = game_data.get('size_visual', [resolution_up, resolution_down])
+    path_console = game_data.get('console', default_console)
+    display_name = game_data.get('display_name', key)
+    shadow = game_data.get('shadow', True)
+    date = game_data.get('date', '198X-XX-XX')
+
+    generate_game_file(
+        destination_game_file, key, display_name,
+        game_data["ref"].replace('-', '_').upper(), date,
+        game_data["Rom"], game_data["Visual"], size_visual,
+        path_console, melody_path, background_path,
+        rotate, mask, color_segment, two_in_one_screen,
+        game_data["transform_visual"],
+        alpha_bright, fond_bright, shadow
+    )
+    
+    return key
+
+
 if __name__ == "__main__":
     # Validate all game files before processing
     if not validate_game_files(games_path):
@@ -1142,44 +1157,57 @@ if __name__ == "__main__":
     os.makedirs(r'.\tmp', exist_ok=True)
     os.makedirs(r'.\tmp\img', exist_ok=True)
     
-    games_ref = []
-    
+    # Prepare game data with default values
+    game_items = []
     for key in games_path:
-        print("\n\n--------")
-        print(key)
-        print("")
-
-        if(reset_img_svg):
-            try: shutil.rmtree("./tmp/img/" + key)
-            except : a = 0
-                    
-        # default value if not exist
-        if not 'alpha_bright' in games_path[key]: games_path[key]['alpha_bright'] = default_alpha_bright
-        if not 'fond_bright' in games_path[key]: games_path[key]['fond_bright'] = default_fond_bright
-        if not 'rotate' in games_path[key]: games_path[key]['rotate'] = default_rotate
-        if not 'mask' in games_path[key]: games_path[key]['mask'] = False
-        if not 'color_segment' in games_path[key]: games_path[key]['color_segment'] = False
-        if not '2_in_one_screen' in games_path[key]: games_path[key]['2_in_one_screen'] = False
-        if not 'Melody_Rom' in games_path[key]: games_path[key]['Melody_Rom'] = ''
-        if not 'Background' in games_path[key]: games_path[key]['Background'] = []
-        if not 'size_visual' in games_path[key]: games_path[key]['size_visual'] = [resolution_up, resolution_down]
-        if not 'console' in games_path[key]: games_path[key]['console'] = default_console
-        if not 'display_name' in games_path[key]: games_path[key]['display_name'] = key
-        if not 'shadow' in games_path[key]: games_path[key]['shadow'] = True 
-        if not 'date' in games_path[key]: games_path[key]['date'] = '198X-XX-XX' 
-
-
-        generate_game_file(destination_game_file, key, games_path[key]["display_name"]
-                            , games_path[key]["ref"].replace('-', '_').upper(), games_path[key]['date']
-                            , games_path[key]["Rom"], games_path[key]["Visual"], games_path[key]["size_visual"]
-                            , games_path[key]["console"]
-                            , games_path[key]["Melody_Rom"], games_path[key]["Background"]
-                            , games_path[key]["rotate"], games_path[key]["mask"], games_path[key]["color_segment"]
-                            , games_path[key]["2_in_one_screen"]
-                            , games_path[key]["transform_visual"]
-                            , games_path[key]["alpha_bright"], games_path[key]['fond_bright'], games_path[key]['shadow'])
+        game_data = games_path[key].copy()
+        
+        # Set defaults
+        if 'alpha_bright' not in game_data: game_data['alpha_bright'] = default_alpha_bright
+        if 'fond_bright' not in game_data: game_data['fond_bright'] = default_fond_bright
+        if 'rotate' not in game_data: game_data['rotate'] = default_rotate
+        if 'mask' not in game_data: game_data['mask'] = False
+        if 'color_segment' not in game_data: game_data['color_segment'] = False
+        if '2_in_one_screen' not in game_data: game_data['2_in_one_screen'] = False
+        if 'Melody_Rom' not in game_data: game_data['Melody_Rom'] = ''
+        if 'Background' not in game_data: game_data['Background'] = []
+        if 'size_visual' not in game_data: game_data['size_visual'] = [resolution_up, resolution_down]
+        if 'console' not in game_data: game_data['console'] = default_console
+        if 'display_name' not in game_data: game_data['display_name'] = key
+        if 'shadow' not in game_data: game_data['shadow'] = True 
+        if 'date' not in game_data: game_data['date'] = '198X-XX-XX'
+        
+        game_items.append((key, game_data))
+    
+    # Process games in parallel using multiprocessing
+    # Adjust the number of processes based on your CPU cores
+    # Use fewer processes if you run into memory issues
+    num_processes = min(8, os.cpu_count() or 1)  # Use up to 8 processes
+    
+    print(f"\n{'='*60}")
+    print(f"Processing {len(game_items)} games using {num_processes} parallel processes...")
+    print(f"{'='*60}\n")
+    
+    try:
+        with Pool(processes=num_processes) as pool:
+            results = pool.map(process_single_game, game_items)
+        
+        print(f"\n{'='*60}")
+        print(f"Successfully processed {len(results)} games!")
+        print(f"{'='*60}\n")
+        
+    except Exception as e:
+        print(f"\n❌ Error during parallel processing: {e}")
+        print("Falling back to sequential processing...\n")
+        
+        # Fallback to sequential processing
+        for item in game_items:
+            try:
+                process_single_game(item)
+            except Exception as game_error:
+                print(f"Error processing {item[0]}: {game_error}")
+                continue
 
     generate_global_file(games_path, destination_file)
         
     print("\n\n\n\n------------------------------------------------------ Finish !!!!!!!!!!!!")
-       
