@@ -1,4 +1,5 @@
 import os
+import glob
 import shutil
 from PIL import Image, ImageEnhance
 import numpy as np
@@ -17,7 +18,7 @@ destination_file = r"..\source\std\GW_ALL.h"
 destination_game_file = r"..\source\std\GW_ROM"
 destination_graphique_file = "../gfx/"
 
-reset_img_svg = False
+reset_img_svg = False  # default; can be overridden via CLI
 resolution_up = [400, 240]
 resolution_down = [320, 240]
 demi_resolution_up = [200, 240]
@@ -1117,7 +1118,21 @@ def process_single_game(args):
 
     if reset_img_svg:
         try: 
+            # Remove existing ./tmp/img/<game> directory if it exists
             shutil.rmtree("./tmp/img/" + key)
+            print(f"Removed cache folder: tmp/img/{key}")
+
+            # Clean up gfx for this game: remove all .t3s and .png files
+            # whose filenames contain the current game key, using glob
+            if os.path.exists(destination_graphique_file):
+                pattern = os.path.join(destination_graphique_file, f"*{key}*")
+                for file_path in glob.glob(pattern):
+                    filename = os.path.basename(file_path)
+                    try:
+                        os.remove(file_path)
+                        print(f"Removed: {filename}")
+                    except Exception as e:
+                        print(f"Error removing {filename}: {e}")
         except: 
             pass
                 
@@ -1150,8 +1165,39 @@ def process_single_game(args):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Build Game & Watch 3DS assets")
+    parser.add_argument(
+        "--game",
+        "-g",
+        metavar="NAME",
+        help="Only rebuild a single game (use key from games_path, e.g. 'cgrab' or 'Fire')",
+    )
+    parser.add_argument(
+        "--parallel",
+        dest="use_parallel",
+        action="store_true",
+        help="Enable multiprocessing when building multiple games",
+    )
+    parser.add_argument(
+        "-c",
+        "--clean",
+        dest="reset_img_svg",
+        action="store_true",
+        help="Delete and regenerate ./tmp/img/<game> before processing",
+    )
+
+    args = parser.parse_args()
+
     # Toggle to control processing mode
-    USE_PARALLEL_PROCESSING = False  # Set to True to enable multiprocessing
+    USE_PARALLEL_PROCESSING = args.use_parallel  # default False unless --parallel is passed
+
+    # Control whether we reset ./tmp/img/<game> directories before processing
+    # If -c/--clean is passed, we enable cleaning; otherwise we leave the
+    # module-level default value unchanged.
+    if args.reset_img_svg:
+        reset_img_svg = True
 
     # Validate all game files before processing
     if not validate_game_files(games_path):
@@ -1161,21 +1207,21 @@ if __name__ == "__main__":
     os.makedirs(r'.\tmp', exist_ok=True)
     os.makedirs(r'.\tmp\img', exist_ok=True)
 
-    # Clean up gfx folder - remove all .t3s and .png files except logo_ and texte_ prefixes
-    if os.path.exists(destination_graphique_file):
-        for filename in os.listdir(destination_graphique_file):
-            if filename.endswith(('.t3s', '.png')):
-                if not filename.startswith(('logo_', 'texte_')):
-                    file_path = os.path.join(destination_graphique_file, filename)
-                    try:
-                        os.remove(file_path)
-                        print(f"Removed: {filename}")
-                    except Exception as e:
-                        print(f"Error removing {filename}: {e}")
-
-    # Prepare game data with default values
+    # Prepare game data with default values (optionally for a single game)
     game_items = []
-    for key in games_path:
+
+    # If a specific game was requested, only process that one
+    if args.game:
+        if args.game not in games_path:
+            print(f"Unknown game '{args.game}'. Available keys:")
+            for k in sorted(games_path.keys()):
+                print(f"  - {k}")
+            exit(1)
+        keys_to_process = [args.game]
+    else:
+        keys_to_process = list(games_path.keys())
+
+    for key in keys_to_process:
         game_data = games_path[key].copy()
         
         # Set defaults
@@ -1235,8 +1281,6 @@ if __name__ == "__main__":
             try:
                 result = process_single_game(item)
                 results.append(result)
-                print_timing_stats()
-                reset_timing_stats()
             except Exception as game_error:
                 print(f"Error processing {item[0]}: {game_error}")
                 continue
