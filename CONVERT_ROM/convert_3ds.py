@@ -749,7 +749,8 @@ def segment_text(all_img, name, color_segment:bool = False):
         seg_y = int(filename.split(".")[1])
         seg_z = int(filename.split(".")[2].split("_")[0])
         color_index = 0
-        if(color_segment): color_index = int(filename.split("_")[1])
+        if(color_segment): 
+            color_index = int(filename.split("_")[1].split(".")[0])
         result += f"{{ {{ {seg_x},{seg_y},{seg_z} }}, {{ {pos_x},{pos_y} }}, {{ {pos_x_tex},{pos_y_tex} }}, {{ {size_x},{size_y} }}, {color_index}, {screen}, false, false, 0 }}, "
     result = result[:-2] + "\n};"
     result += f"  const size_t size_segment_GW_{name} = sizeof(segment_GW_{name})/sizeof(segment_GW_{name}[0]); \n"
