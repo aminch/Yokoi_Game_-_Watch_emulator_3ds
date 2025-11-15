@@ -21,6 +21,8 @@ You will need:
 * A screenshot of each console. The easiest way to get this is to use MAME on the PC with the ROMs and Artwork above. Then start each game and take a screenshot. Save each screenshot using the same name as the ROM zip file. (e.g. gnw_ball.png)
   * Place all of these screenshots into the `CONVERT_ROM\rom\console` folder
 
+It is recommended to use a Python virtual environment, and you can install the required python modules with the requirements.txt
+
 ## Main scripts
 
 ### `convert_original.py`
