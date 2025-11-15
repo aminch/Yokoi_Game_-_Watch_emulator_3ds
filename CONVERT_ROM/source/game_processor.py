@@ -50,6 +50,14 @@ class GameProcessor:
 		self.rom_root = self.script_root / "rom"
 		self.info: Optional[GameEntry] = None
 
+		# Colour mapping configuration (can be overridden per-game)
+		# mode: 'columns' -> vertical bands based on X, 'rows' -> horizontal bands based on Y
+		self.colour_mode: str = "columns"
+		# Optional explicit band mapping: index -> colour name, mainly for logging
+		self.colour_names = {0: "none", 1: "purple", 2: "mint", 3: "coral", 4: "blue"}
+		# Fraction of total height considered as header region for colour index 0
+		self.header_fraction: float = 0.10
+
 	def load_info(self) -> bool:
 		updater = GamesPathUpdater()
 		target = updater.get_target(self.game_key)
@@ -145,11 +153,48 @@ class GameProcessor:
 			else:
 				return 4
 
+		def determine_row_index(y_pos: Optional[float], viewbox_height: float) -> int:
+			"""Determine colour index from Y position (5-band layout including header).
+
+			Bands as fractions of full height:
+			- Header (cream):     ~20% -> index 0 (handled by is_in_header)
+			- Band 1 (coral):     ~12% -> index 3
+			- Band 2 (blue):      ~18% -> index 4
+			- Band 3 (teal):      ~18% -> index 2
+			- Band 4 (purple):    ~32% -> index 1
+			"""
+			if y_pos is None:
+				return 0
+
+			h = viewbox_height
+
+			header_end = h * self.header_fraction          # 15%
+			band1_end  = h * (self.header_fraction + 0.10) # 10%
+			band2_end  = h * (self.header_fraction + 0.10 + 0.14) # 50%
+			band3_end  = h * (self.header_fraction + 0.10 + 0.14 + 0.20) # 68%
+			# remainder (68%–100%) is band 4
+
+			# Note: header check is done separately in is_in_header,
+			# so anything below header_end should be in one of the colour bands.
+			if y_pos < header_end:
+				return 0  # safety; normally caught by is_in_header
+			elif y_pos < band1_end:
+				return 3  # coral
+			elif y_pos < band2_end:
+				return 4  # blue
+			elif y_pos < band3_end:
+				return 2  # teal
+			else:
+				return 1  # purple
+
 		def is_in_header(y_pos: Optional[float], viewbox_height: float) -> bool:
-			"""Return True if segment is in the header."""
+			"""Return True if segment is in the header.
+
+			Uses per-game configurable self.header_fraction of the total height.
+			"""
 			if y_pos is None:
 				return False
-			header_threshold = viewbox_height * 0.10
+			header_threshold = viewbox_height * self.header_fraction
 			return y_pos < header_threshold
 
 		for elem in root.iter():
@@ -174,28 +219,33 @@ class GameProcessor:
 				continue
 
 			x_pos, y_pos = get_segment_xy_position(elem)
-			if x_pos is None:
-				print(f"  Warning: no position for {current_title}")
+			if x_pos is None and y_pos is None:
+				print(f"	Warning: no position for {current_title}")
 				continue
 
 			if is_in_header(y_pos, viewbox_height):
 				color_idx = 0
 				reason = "in header"
 			else:
-				color_idx = determine_column_index(x_pos, viewbox_width)
+				# Choose banding mode based on configured colour_mode
+				if self.colour_mode == "rows":
+					color_idx = determine_row_index(y_pos, viewbox_height)
+				else:
+					color_idx = determine_column_index(x_pos, viewbox_width)
+
 				if color_idx == 0:
-					print(f"  Warning: could not assign colour for {current_title}")
+					print(f"	Warning: could not assign colour for {current_title}")
 					continue
 				reason = None
 
 			new_title = f"{current_title}_{color_idx}"
 			title_elem.text = new_title
 
-			color_names = {0: "none", 1: "purple", 2: "mint", 3: "coral", 4: "blue"}
+			colour_names = self.colour_names or {}
 			extra = f" ({reason})" if reason else ""
 			print(
-				f"  {current_title} (x={x_pos:.1f}, y={y_pos:.1f}) "
-				f"-> {new_title} ({color_names.get(color_idx, 'unknown')}){extra}"
+				f"	{current_title} (x={x_pos:.1f}, y={y_pos:.1f}) "
+				f"-> {new_title} ({colour_names.get(color_idx, 'unknown')}){extra}"
 			)
 			modified_count += 1
 
