@@ -40,6 +40,7 @@ class GameEntry:
 	size_visual: List[List[int]] = field(default_factory=list)
 	two_in_one_screen: bool = False
 	mask: bool = False
+	shadow: bool = True
 	color_segment: bool = False
 	alpha_bright: float = default_alpha_bright
 	fond_bright: float = default_fond_bright
@@ -75,6 +76,10 @@ class GameEntry:
 
 		if self.mask:
 			lines.append(f'{INDENT_FIELD}, "mask" : True')
+
+		if not self.shadow:
+			# Only emit when False to keep older files compact.
+			lines.append(f'{INDENT_FIELD}, "shadow" : False')
 
 		if self.color_segment:
 			lines.append(f'{INDENT_FIELD}, "color_segment" : True')
@@ -256,6 +261,7 @@ def _dict_to_entries(games_path: Dict[str, Any], script_root: Path) -> List[Game
 		size_visual = data.get("size_visual") or []
 		two_in_one = bool(data.get("2_in_one_screen", False))
 		mask = bool(data.get("mask", False))
+		shadow = bool(data.get("shadow", True))
 		color_segment = bool(data.get("color_segment", False))
 		alpha_bright = float(data.get("alpha_bright", default_alpha_bright))
 		fond_bright = float(data.get("fond_bright", default_fond_bright))
@@ -281,6 +287,7 @@ def _dict_to_entries(games_path: Dict[str, Any], script_root: Path) -> List[Game
 				size_visual=size_visual,
 				two_in_one_screen=two_in_one,
 				mask=mask,
+				shadow=shadow,
 				color_segment=color_segment,
 				alpha_bright=alpha_bright,
 				fond_bright=fond_bright,
