@@ -70,7 +70,10 @@ class GameProcessor:
 		# folder path for this game
 		self.base_dir = self.rom_root / self.game_folder
 		self.rework_dir = self.base_dir / "rework" # output rework folder
-		
+
+		# Ensure rework directory exists
+		self.rework_dir.mkdir(parents=True, exist_ok=True)
+
 		return True
 
 	def add_colour_indices(self) -> None:
@@ -81,9 +84,6 @@ class GameProcessor:
 		folder and writes a processed copy with indices into the ``rework``
 		subfolder, preserving the original filename.
 		"""
-
-		# Ensure rework directory exists
-		self.rework_dir.mkdir(parents=True, exist_ok=True)
 
 		if not self.info.visual_paths:
 			print("Cannot add colour indices: 'Visual' field missing in games_path entry.")
@@ -260,13 +260,14 @@ class GameProcessor:
 			f"{skipped_count} skipped (already had index)"
 		)
 
-	def combine_images(self, image1: Path, image2: Path, mode: str = "normal") -> Path:
+	def combine_images(self, image1: Path, image2: Path, mode: str = "normal", alpha: float = 1.0) -> Path:
 		"""Combine two background images into one with a blend mode.
 
 		Args:
 			bg1: Base/background image path (destination).
 			bg2: Foreground image path (source).
-			mode: One of "normal" (alpha over), "add", or "multiply".
+			mode: One of "normal" (alpha over), "add", "multiply", or "blend".
+			alpha: Opacity of the overlay (0.0 to 1.0, default 1.0). Only used for "blend" mode.
 
 		Returns:
 			Path to the combined image written into the rework folder.
@@ -283,7 +284,10 @@ class GameProcessor:
 		mode = mode.lower()
 		combined = img1.copy()
 
-		if mode == "normal":
+		if mode == "blend":
+			# Direct blend with transparency control
+			combined = ImageChops.blend(combined.convert("RGB"), img2.convert("RGB"), alpha).convert("RGBA")
+		elif mode == "normal":
 			# Standard source-over alpha composite
 			combined.alpha_composite(img2)
 		elif mode in {"add", "multiply"}:
@@ -317,13 +321,13 @@ class GameProcessor:
 
 		return out_path
 
-	def combine_background_paths(self, current_background: Path, overlay_background: Path, mode:str="normal"):
+	def combine_background_paths(self, current_background: Path, overlay_background: Path, mode:str="normal", alpha:float=1.0):
 		# check overlay_background exists
 		if not overlay_background.exists():
 			print(f"File not found: {overlay_background} for game {self.game_key}")
 			raise SystemExit(1)
 		
-		return [self.combine_images(current_background, overlay_background, mode=mode)]
+		return [self.combine_images(current_background, overlay_background, mode=mode, alpha=alpha)]
 	
 	def multiscreen_conversion(self) -> None:
 		"""Placeholder for multiscreen conversion logic for this game."""
