@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string>
 #include <SM5XX\Base_Structure.h>
+#include "virtual_i_o/time_addresses.h"
 
 #define NO_WAIT_CYCLE true 
 
@@ -66,11 +67,15 @@ protected:
 
     bool time_set_state = false;
 
+    // time addresses
+    const TimeAddress *time_addresses;
+
 public:
     bool step();
     void execute_cycle();
     void input_set(int group, int line, bool state);
 
+    void load_rom_time_addresses(const std::string& ref_game);
     void time_set(bool state){ time_set_state = state; }
     bool is_time_set(){ return time_set_state; }
 

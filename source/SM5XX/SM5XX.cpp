@@ -1,5 +1,6 @@
 #include "SM5XX/SM5XX.h"
 #include "std/timer.h"
+#include "virtual_i_o/time_addresses.h"
 
 
 bool SM5XX::step(){ // loop of CPU
@@ -145,6 +146,12 @@ bool SM5XX::condition_to_wake_up(){ // wake up when bouton are pressed or 1sec i
     return (gamma_flag_second | check_button_pressed()); 
 }
 
+//////////////////////////////////// Time Addresses ////////////////////////////////////
+
+void SM5XX::load_rom_time_addresses(const std::string& ref_game)
+{
+    time_addresses = get_time_addresses(ref_game);
+}
 
 
 //////////////////////////////////// Usefull function ////////////////////////////////////

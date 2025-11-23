@@ -265,6 +265,7 @@ void init_game(SM5XX** cpu, Virtual_Screen* v_screen, Virtual_Sound* v_sound, Vi
     (*cpu)->init();
     (*cpu)->load_rom(game->rom, game->size_rom);
     (*cpu)->load_rom_melody(game->melody, game->size_melody);
+    (*cpu)->load_rom_time_addresses(game->ref);
 
     // Load saved state if requested
     if(load_save) {

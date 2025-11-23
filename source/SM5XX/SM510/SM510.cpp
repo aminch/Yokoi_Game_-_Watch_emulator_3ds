@@ -210,24 +210,23 @@ uint8_t SM510::debug_get_elem_ram(int col, int line) {
 void SM510::set_time(uint8_t hour, uint8_t minute, uint8_t second) {
     if (is_time_set()) 
         return; // only set time once
-/*
-    // Target columns used by the clock digits
-    const uint8_t target_col = 4;
 
-    // If the hour is greater than 12 then remove 12, and add 20
-    uint8_t hour_12h_value = hour;
-    uint8_t pm_bit = 0x00;
-    if (hour_12h_value > 12) {
-        hour_12h_value -= 12;
-        pm_bit = 0x02;
-    } // else keep the hour as-is for AM -> 
+    // Use time_addresses if available, otherwise fallback to default (col 4, lines as before)
+    if (time_addresses) {
+        // If the hour is greater than 12 then remove 12, and add PM bit
+        uint8_t hour_12h_value = hour;
+        uint8_t pm_bit = 0x00;
+        if (hour_12h_value > 12) {
+            hour_12h_value -= 12;
+            pm_bit = time_addresses->pm_bit;
+        }
 
-    // Set the time digits in RAM
-    ram[target_col][4] = (hour_12h_value / 10) | pm_bit; // tens of hours + PM bit
-    ram[target_col][3] = hour_12h_value % 10;            // units of hours   
-    ram[target_col][2] = minute / 10;                    // tens of minutes
-    ram[target_col][1] = minute % 10;                    // units of minutes
-    ram[target_col][6] = second / 10;                    // tens of seconds
-    ram[target_col][5] = second % 10;                    // units of seconds
-    */
+        // Set the time digits in RAM using per-digit (col, line)
+        ram[time_addresses->col_hour_tens][time_addresses->line_hour_tens] = (hour_12h_value / 10) | pm_bit;
+        ram[time_addresses->col_hour_units][time_addresses->line_hour_units] = hour_12h_value % 10;
+        ram[time_addresses->col_minute_tens][time_addresses->line_minute_tens] = minute / 10;
+        ram[time_addresses->col_minute_units][time_addresses->line_minute_units] = minute % 10;
+        ram[time_addresses->col_second_tens][time_addresses->line_second_tens] = second / 10;
+        ram[time_addresses->col_second_units][time_addresses->line_second_units] = second % 10;
+    }
 }
