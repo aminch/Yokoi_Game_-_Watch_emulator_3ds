@@ -1,3 +1,4 @@
+#include "SM5XX/SM510/SM510.h"
 #include "SM5XX/sm510/sm510.h"
 #include "std/timer.h"
 #include <cstring>
@@ -117,6 +118,11 @@ void SM510::write_ram_value(uint8_t value){
     ram[col][line] = value & 0x0F; // 4 bit RAM
 }
 
+void SM510::set_ram_value(uint8_t col, uint8_t line, uint8_t value) {
+    if (col >= SM510_RAM_COL || line >= SM510_RAM_LINE) 
+        return; 
+    ram[col][line] = value;
+}
 
 /////////////////////////// Wake up //////////////////////////////////////////////////////
 
@@ -207,26 +213,3 @@ uint8_t SM510::debug_get_elem_ram(int col, int line) {
     return ram[col_][line_]; 
 }
 
-void SM510::set_time(uint8_t hour, uint8_t minute, uint8_t second) {
-    if (is_time_set()) 
-        return; // only set time once
-
-    // Use time_addresses if available, otherwise fallback to default (col 4, lines as before)
-    if (time_addresses) {
-        // If the hour is greater than 12 then remove 12, and add PM bit
-        uint8_t hour_12h_value = hour;
-        uint8_t pm_bit = 0x00;
-        if (hour_12h_value > 12) {
-            hour_12h_value -= 12;
-            pm_bit = time_addresses->pm_bit;
-        }
-
-        // Set the time digits in RAM using per-digit (col, line)
-        ram[time_addresses->col_hour_tens][time_addresses->line_hour_tens] = (hour_12h_value / 10) | pm_bit;
-        ram[time_addresses->col_hour_units][time_addresses->line_hour_units] = hour_12h_value % 10;
-        ram[time_addresses->col_minute_tens][time_addresses->line_minute_tens] = minute / 10;
-        ram[time_addresses->col_minute_units][time_addresses->line_minute_units] = minute % 10;
-        ram[time_addresses->col_second_tens][time_addresses->line_second_tens] = second / 10;
-        ram[time_addresses->col_second_units][time_addresses->line_second_units] = second % 10;
-    }
-}

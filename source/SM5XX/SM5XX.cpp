@@ -154,6 +154,33 @@ void SM5XX::load_rom_time_addresses(const std::string& ref_game)
     time_addresses = get_time_addresses(ref_game);
 }
 
+void SM5XX::set_time(uint8_t hour, uint8_t minute, uint8_t second) {
+    if (is_time_set()) 
+        return; // only set time once
+
+    // Use time_addresses if available, otherwise fallback to default (col 4, lines as before)
+    if (time_addresses) {
+        // If the hour is greater than 12 then remove 12, and add PM bit
+        uint8_t hour_12h_value = hour;
+        uint8_t pm_bit = 0x00;
+        
+        // Skip setting PM bit if pm_bit == 24 (indicates 24-hour clock)
+        if (time_addresses->pm_bit != 24) {
+            if (hour_12h_value > 12) {
+                hour_12h_value -= 12;
+                pm_bit = time_addresses->pm_bit;
+            }
+        }
+
+        // Set the time digits in RAM using per-digit (col, line)
+        set_ram_value(time_addresses->col_hour_tens, time_addresses->line_hour_tens, (hour_12h_value / 10) | pm_bit);
+        set_ram_value(time_addresses->col_hour_units, time_addresses->line_hour_units, hour_12h_value % 10);
+        set_ram_value(time_addresses->col_minute_tens, time_addresses->line_minute_tens, minute / 10);
+        set_ram_value(time_addresses->col_minute_units, time_addresses->line_minute_units, minute % 10);
+        set_ram_value(time_addresses->col_second_tens, time_addresses->line_second_tens, second / 10);
+        set_ram_value(time_addresses->col_second_units, time_addresses->line_second_units, second % 10);
+    }
+}
 
 //////////////////////////////////// Usefull function ////////////////////////////////////
 

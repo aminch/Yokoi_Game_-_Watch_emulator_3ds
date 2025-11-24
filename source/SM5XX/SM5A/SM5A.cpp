@@ -1,4 +1,4 @@
-
+#include "SM5XX/SM5A/SM5A.h"
 #include "SM5XX/SM5A/sm5A.h"
 #include "std/timer.h"
 #include <cstring>
@@ -113,6 +113,11 @@ void SM5A::write_ram_value(uint8_t value){
     ram[col][line] = (value & 0x0F);
 }
 
+void SM5A::set_ram_value(uint8_t col, uint8_t line, uint8_t value) {
+    if (col >= SM5A_RAM_COL || line >= SM5A_RAM_LINE) 
+        return;
+    ram[col][line] = value;
+}
 
 
 
@@ -173,10 +178,4 @@ uint8_t SM5A::debug_get_elem_ram(int col, int line) {
     uint8_t col_ = min(col, SM5A_RAM_COL-1); // copy of max value if col and line too big
     uint8_t line_ = min(line, SM5A_RAM_LINE-1);
     return ram[col_][line_];
-}
-
-// Empty set_time implementation for SM5A (required by base class).
-// Derived CPUs can implement real behavior if needed.
-void SM5A::set_time(uint8_t hour, uint8_t minute, uint8_t second) {
-
 }

@@ -78,6 +78,7 @@ public:
     void load_rom_time_addresses(const std::string& ref_game);
     void time_set(bool state){ time_set_state = state; }
     bool is_time_set(){ return time_set_state; }
+    void set_time(uint8_t hour, uint8_t minute, uint8_t second);
 
 private : 
     void adding_program_counter(const uint8_t* opcode);
@@ -116,10 +117,6 @@ public :
 
     virtual bool get_active_sound(){ return false; };
 
-    // Allow the frontend to set the current time on the emulated CPU.
-    // Pure virtual: derived classes must implement this (can be empty).
-    virtual void set_time(uint8_t hour, uint8_t minute, uint8_t second) = 0;
-
     // Save/Load state for save states
     virtual bool save_state(FILE* file) = 0;
     virtual bool load_state(FILE* file) = 0;
@@ -142,6 +139,7 @@ protected:
     virtual uint8_t read_rom_value() = 0;
     virtual uint8_t read_ram_value() = 0;
     virtual void write_ram_value(uint8_t value) = 0;
+    virtual void set_ram_value(uint8_t col, uint8_t line, uint8_t value) = 0;
 
 
 
