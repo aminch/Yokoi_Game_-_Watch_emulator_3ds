@@ -1,6 +1,7 @@
 #include "SM5XX/SM5XX.h"
 #include "std/timer.h"
 #include "virtual_i_o/time_addresses.h"
+#include <sys/stat.h>
 
 
 bool SM5XX::step(){ // loop of CPU
@@ -169,4 +170,52 @@ void SM5XX::copy_buffer(const ProgramCounter& src, ProgramCounter& dst) {
     dst.word = src.word;
 }
 
+///////////////////////////////////// Debug ////////////////////////////////////
 
+void SM5XX::debug_dump_ram_state(const char* filename) {
+    // Dump the current RAM state to a file for debugging on the sd card here: "sdmc:/3ds/debug/"
+    // check the folder exists
+    mkdir("sdmc:/3ds/debug", 0777);
+
+    // Build full path
+    std::string full_path = std::string("sdmc:/3ds/debug/") + filename;
+    FILE* file = fopen(full_path.c_str(), "a"); // append mode
+    if (!file) return;
+
+    // Print header with game name
+    fprintf(file, "---- RAM DUMP ----\n");
+    fprintf(file, "CPU: %s\n", name_cpu.c_str());
+
+    // Print time (HH:MM:SS)
+    time_t rawtime;
+    struct tm* timeinfo;
+    char time_str[16];
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(time_str, sizeof(time_str), "%H:%M:%S", timeinfo);
+    fprintf(file, "Time: %s \n", time_str);
+
+    int cols = debug_ram_adress_size_col();
+    int lines = debug_ram_adress_size_line();
+
+    // Print column header
+    fprintf(file, "Cols    :");
+    for(int col = 0; col < cols; col++) {
+        fprintf(file, " %d", col);
+    }
+    fprintf(file, "\n");
+
+    // Print separator
+    fprintf(file, "-------------------\n");
+
+    // Print RAM contents
+    for(int line = 0; line < lines; line++){
+        fprintf(file, "Line %02d :", line);
+        for(int col = 0; col < cols; col++){
+            fprintf(file, " %X", debug_get_elem_ram(col, line) & 0x0F);
+        }
+        fprintf(file, " \n");
+    }
+    fprintf(file, "\n");
+    fclose(file);
+}

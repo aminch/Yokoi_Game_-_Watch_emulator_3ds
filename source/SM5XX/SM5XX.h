@@ -227,6 +227,8 @@ public :
     int debug_ram_adress_col(){ return ram_address.col; }
     int debug_ram_adress_line(){ return ram_address.line; }
 
+    void debug_dump_ram_state(const char* filename);
+
     virtual uint8_t debug_get_elem_rom(int, int, int) { return 0x00; }
     virtual int debug_rom_adress_size_col(){ return 0; }
     virtual int debug_rom_adress_size_line(){ return 0; }
