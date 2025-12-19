@@ -30,3 +30,9 @@ Yokoi*.smdh
 
 .DS_Store
 Thumbs.db   
+
+android/app/build
+android/app/captures 
+android/app/outputs
+android/.gradle
+android/app/.cxx
