@@ -857,6 +857,11 @@ public final class MainActivity extends Activity {
         if (secondGlView != null) {
             secondGlView.onPause();
         }
+        // If we're leaving for good, immediately dismiss the second display Presentation
+        // so it doesn't linger showing the last frame.
+        if (isFinishing()) {
+            stopSecondDisplay();
+        }
         // Avoid stuck controller bits if a device disconnects or stops sending events.
         controllerMask = 0;
         nativeSetControllerMask(0);
@@ -877,6 +882,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         stopSecondDisplay();
+        stopAudio();
         super.onDestroy();
     }
 
@@ -887,6 +893,8 @@ public final class MainActivity extends Activity {
             nativeReturnToMenu();
             return;
         }
+        // Ensure the second display is closed immediately when exiting via Back.
+        stopSecondDisplay();
         super.onBackPressed();
     }
 }
