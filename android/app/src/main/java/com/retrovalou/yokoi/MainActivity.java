@@ -93,6 +93,9 @@ public final class MainActivity extends Activity {
     private GLSurfaceView secondGlView;
     private volatile boolean dualDisplayEnabled;
 
+    // Single-display convenience: render the top panel only while in-game.
+    private volatile boolean singleScreenTopOnly;
+
     // Must match native AppMode enum in yokoi_jni.cpp
     private static final int MODE_MENU_SELECT = 0;
     private static final int MODE_MENU_LOAD_PROMPT = 1;
@@ -182,6 +185,7 @@ public final class MainActivity extends Activity {
 
         final int mode = nativeGetAppMode();
         final boolean inGame = (mode == MODE_GAME);
+        final boolean hasExternalDisplay = hasExternalDisplayConnected();
 
         if (inGame) {
             nativeSetPaused(true);
@@ -274,9 +278,32 @@ public final class MainActivity extends Activity {
                 if (settingsDialog != null) {
                     settingsDialog.dismiss();
                 }
+                singleScreenTopOnly = false;
                 nativeReturnToMenu();
             });
             root.addView(quitBtn);
+
+            // Single-screen only: allow rendering just the top panel.
+            // Do not show this option at all if an external display is connected.
+            if (!hasExternalDisplay) {
+                LinearLayout.LayoutParams btnLp3 = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+                btnLp3.topMargin = pad / 2;
+
+                Button topOnlyBtn = new Button(this);
+                topOnlyBtn.setLayoutParams(btnLp3);
+                topOnlyBtn.setText(singleScreenTopOnly ? "Show both screens" : "Top screen only");
+                topOnlyBtn.setOnClickListener(v -> {
+                    singleScreenTopOnly = !singleScreenTopOnly;
+                    // Ensure the emulation-driver panel is TOP when in top-only mode.
+                    nativeSetEmulationDriverPanel(0);
+                    if (settingsDialog != null) {
+                        settingsDialog.dismiss();
+                    }
+                });
+                root.addView(topOnlyBtn);
+            }
         }
 
         LinearLayout.LayoutParams btnLp2 = new LinearLayout.LayoutParams(
@@ -737,6 +764,10 @@ public final class MainActivity extends Activity {
                 }
 
                 int mode = nativeGetAppMode();
+                if (mode != MODE_GAME) {
+                    // Leaving the game always returns to the default two-panel layout.
+                    singleScreenTopOnly = false;
+                }
                 int choice = nativeGetMenuLoadChoice();
                 if (mode != MODE_GAME && (mode != uiLastMode || choice != uiLastChoice || gen != uiLastGen)) {
                     if (lastUiTexId != 0) {
@@ -755,6 +786,9 @@ public final class MainActivity extends Activity {
                 if (dualDisplayEnabled) {
                     // Default (physical bottom / touch) display: render the BOTTOM panel.
                     nativeRenderPanel(1);
+                } else if (singleScreenTopOnly && !hasExternalDisplayConnected()) {
+                    // Single-display convenience mode.
+                    nativeRenderPanel(0);
                 } else {
                     nativeRender();
                 }
@@ -867,6 +901,20 @@ public final class MainActivity extends Activity {
         return super.onGenericMotionEvent(event);
     }
 
+    private boolean hasExternalDisplayConnected() {
+        if (displayManager == null) {
+            return false;
+        }
+        Display defaultDisplay = getWindowManager().getDefaultDisplay();
+        int defaultId = defaultDisplay != null ? defaultDisplay.getDisplayId() : Display.DEFAULT_DISPLAY;
+        for (Display d : displayManager.getDisplays()) {
+            if (d != null && d.getDisplayId() != defaultId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void tryStartSecondDisplay() {
         if (displayManager == null || secondPresentation != null) {
             return;
@@ -886,6 +934,9 @@ public final class MainActivity extends Activity {
             dualDisplayEnabled = false;
             return;
         }
+
+        // External display present: never keep single-screen top-only mode.
+        singleScreenTopOnly = false;
 
         secondPresentation = new SecondScreenPresentation(this, candidate);
         try {
