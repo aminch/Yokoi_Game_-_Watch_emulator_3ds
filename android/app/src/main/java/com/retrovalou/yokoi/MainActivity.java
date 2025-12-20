@@ -50,6 +50,7 @@ public final class MainActivity extends Activity {
     private static native void nativeSetAssetManager(AssetManager assetManager);
     private static native void nativeSetStorageRoot(String path);
     private static native void nativeInit();
+    private static native void nativeShutdown();
     private static native String[] nativeGetTextureAssetNames();
     private static native void nativeSetTextures(
             int segmentTex, int segmentW, int segmentH,
@@ -1101,6 +1102,7 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         stopSecondDisplay();
         stopAudio();
+        nativeShutdown();
         super.onDestroy();
     }
 

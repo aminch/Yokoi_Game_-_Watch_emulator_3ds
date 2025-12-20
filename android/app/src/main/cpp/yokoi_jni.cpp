@@ -7,12 +7,17 @@
 
 #include <time.h>
 
+#include <chrono>
+
 #include <string>
 #include <vector>
 #include <memory>
 #include <mutex>
 #include <algorithm>
 #include <atomic>
+
+#include <thread>
+#include <condition_variable>
 
 #include "std/GW_ROM.h"
 #include "std/platform_paths.h"
@@ -101,6 +106,20 @@ std::mutex g_gl_mutex;
 std::vector<GlResources> g_gl;
 std::mutex g_render_mutex;
 
+std::mutex g_cpu_mutex;
+
+std::thread g_emu_thread;
+std::atomic<bool> g_emu_thread_started{false};
+std::atomic<bool> g_emu_quit{false};
+std::mutex g_emu_sleep_mutex;
+std::condition_variable g_emu_cv;
+
+std::mutex g_segment_snapshot_mutex;
+std::shared_ptr<const std::vector<Segment>> g_segments_meta;
+std::shared_ptr<std::vector<uint8_t>> g_seg_on_front;
+std::shared_ptr<std::vector<uint8_t>> g_seg_on_back;
+std::atomic<uint32_t> g_seg_generation{1};
+
 AAssetManager* g_asset_manager = nullptr;
 
 struct RenderVertex {
@@ -115,7 +134,10 @@ const GW_rom* g_game = nullptr;
 
 std::unique_ptr<Virtual_Input> g_input;
 
-std::vector<Segment> g_segments;
+// Segment metadata (positions, UV rects, ids) is immutable per loaded game.
+// We publish it via shared_ptr so the emulation thread and GL thread can safely read it.
+// On/off state is published separately via g_seg_on_front/back.
+std::vector<Segment> g_segments; // legacy container (kept for minimal diffs); do not mutate per-frame state.
 uint16_t g_segment_info[8] = {0};
 bool g_double_in_one_screen = false;
 uint8_t g_nb_screen = 1;
@@ -123,10 +145,10 @@ bool g_split_two_screens_to_panels = false;
 
 bool g_emulation_running = false;
 std::atomic<bool> g_emulation_paused{false};
-int g_gamea_pulse_frames = 0;
-int g_gameb_pulse_frames = 0;
-bool g_left_action_down = false;
-bool g_right_action_down = false;
+std::atomic<int> g_gamea_pulse_frames{0};
+std::atomic<int> g_gameb_pulse_frames{0};
+std::atomic<bool> g_left_action_down{false};
+std::atomic<bool> g_right_action_down{false};
 
 enum AppMode : int {
     MODE_MENU_SELECT = 0,
@@ -619,21 +641,21 @@ static void apply_action_mask(int mask) {
     if (g_input) {
         // Only apply touch-based ACTION presses to parts that are configured as an ACTION button.
         if (g_input->left_configuration == CONF_1_BUTTON_ACTION) {
-            if (g_left_action_down != want_left) {
+            if (g_left_action_down.load() != want_left) {
                 g_input->set_input(PART_LEFT, BUTTON_ACTION, want_left);
-                g_left_action_down = want_left;
+                g_left_action_down.store(want_left);
             }
         }
         if (g_input->right_configuration == CONF_1_BUTTON_ACTION) {
-            if (g_right_action_down != want_right) {
+            if (g_right_action_down.load() != want_right) {
                 g_input->set_input(PART_RIGHT, BUTTON_ACTION, want_right);
-                g_right_action_down = want_right;
+                g_right_action_down.store(want_right);
             }
         }
     } else {
         // No mapping available; clear any prior state.
-        g_left_action_down = false;
-        g_right_action_down = false;
+        g_left_action_down.store(false);
+        g_right_action_down.store(false);
     }
 }
 
@@ -662,8 +684,8 @@ static void apply_controller_mask(uint32_t ctl_mask, int touch_action_mask) {
     // Match 3DS mapping from source/main.cpp::input_get()
     // Setup buttons.
     g_input->set_input(PART_SETUP, BUTTON_TIME, l1);
-    g_input->set_input(PART_SETUP, BUTTON_GAMEA, start || (g_gamea_pulse_frames > 0));
-    g_input->set_input(PART_SETUP, BUTTON_GAMEB, select || (g_gameb_pulse_frames > 0));
+    g_input->set_input(PART_SETUP, BUTTON_GAMEA, start || (g_gamea_pulse_frames.load() > 0));
+    g_input->set_input(PART_SETUP, BUTTON_GAMEB, select || (g_gameb_pulse_frames.load() > 0));
 
     // Left controls.
     if (g_input->left_configuration == CONF_1_BUTTON_ACTION) {
@@ -704,10 +726,10 @@ static void apply_controller_mask(uint32_t ctl_mask, int touch_action_mask) {
 static void reset_runtime_state_for_new_game() {
     g_emulation_running = false;
     g_emulation_paused.store(false);
-    g_gamea_pulse_frames = 0;
-    g_gameb_pulse_frames = 0;
-    g_left_action_down = false;
-    g_right_action_down = false;
+    g_gamea_pulse_frames.store(0);
+    g_gameb_pulse_frames.store(0);
+    g_left_action_down.store(false);
+    g_right_action_down.store(false);
     g_action_mask.store(0);
     g_start_requested.store(false);
     g_rate_accu = 0;
@@ -715,12 +737,18 @@ static void reset_runtime_state_for_new_game() {
 
 static void update_segments_from_cpu(SM5XX* cpu);
 
+static void notify_emu_thread() {
+    g_emu_cv.notify_all();
+}
+
 // Some games overwrite their clock RAM during early startup.
 // The 3DS implementation works around this by re-applying the host time for a short grace period.
 static constexpr int kTimeSetGracePeriod = 500;
 static int g_time_set_grace_counter = 0;
 
 static void load_game_by_index_and_init(uint8_t idx) {
+    std::lock_guard<std::mutex> cpu_lock(g_cpu_mutex);
+
     g_game_index = idx;
     g_game = load_game(idx);
     if (!g_game) {
@@ -749,6 +777,15 @@ static void load_game_by_index_and_init(uint8_t idx) {
     g_segments.clear();
     if (g_game->segment && g_game->size_segment > 0) {
         g_segments.assign(g_game->segment, g_game->segment + g_game->size_segment);
+    }
+
+    {
+        std::lock_guard<std::mutex> snap_lock(g_segment_snapshot_mutex);
+        g_segments_meta = std::make_shared<std::vector<Segment>>(g_segments);
+        const size_t nseg = g_segments_meta ? g_segments_meta->size() : 0;
+        g_seg_on_front = std::make_shared<std::vector<uint8_t>>(nseg, 0);
+        g_seg_on_back = std::make_shared<std::vector<uint8_t>>(nseg, 0);
+        g_seg_generation.fetch_add(1);
     }
 
     rebuild_layout_from_game();
@@ -814,8 +851,8 @@ static void start_game_from_menu(bool load_state) {
     // press GameA/GameB to start a game mode.
     g_emulation_running = true;
     g_emulation_paused.store(false);
-    g_gamea_pulse_frames = 0;
-    g_gameb_pulse_frames = 0;
+    g_gamea_pulse_frames.store(0);
+    g_gameb_pulse_frames.store(0);
 
     if (load_state) {
         if (!load_game_state(g_cpu.get(), idx)) {
@@ -830,9 +867,12 @@ static void start_game_from_menu(bool load_state) {
 
     // Re-apply time for a short grace period after game start.
     g_time_set_grace_counter = kTimeSetGracePeriod;
+    notify_emu_thread();
 }
 
 static void return_to_menu_from_game() {
+    std::lock_guard<std::mutex> cpu_lock(g_cpu_mutex);
+
     // Save progress if we were in a game.
     if (g_app_mode.load() == MODE_GAME && g_cpu) {
         save_game_state(g_cpu.get(), g_game_index);
@@ -842,16 +882,25 @@ static void return_to_menu_from_game() {
     g_emulation_paused.store(false);
     g_action_mask.store(0);
     g_start_requested.store(false);
-    g_gamea_pulse_frames = 0;
-    g_gameb_pulse_frames = 0;
+    g_gamea_pulse_frames.store(0);
+    g_gameb_pulse_frames.store(0);
 
     g_cpu.reset();
     g_input.reset();
     g_segments.clear();
 
+    {
+        std::lock_guard<std::mutex> snap_lock(g_segment_snapshot_mutex);
+        g_segments_meta = std::make_shared<std::vector<Segment>>();
+        g_seg_on_front = std::make_shared<std::vector<uint8_t>>();
+        g_seg_on_back = std::make_shared<std::vector<uint8_t>>();
+        g_seg_generation.fetch_add(1);
+    }
+
     g_app_mode.store(MODE_MENU_SELECT);
     g_menu_load_choice.store(0);
     menu_select_game_by_index(g_game_index);
+    notify_emu_thread();
 }
 
 static void update_segments_from_cpu(SM5XX* cpu) {
@@ -859,20 +908,140 @@ static void update_segments_from_cpu(SM5XX* cpu) {
         return;
     }
 
-    // Same blink-protection behavior as 3DS renderer.
-    auto protect_blinking = [](Segment& seg, bool new_state) {
-        seg.state = seg.state && (new_state || seg.buffer_state);
-        seg.state = seg.state || (new_state && seg.buffer_state);
-    };
+    std::shared_ptr<const std::vector<Segment>> meta;
+    std::shared_ptr<std::vector<uint8_t>> back;
+    static thread_local std::vector<uint8_t> state;
+    static thread_local std::vector<uint8_t> buffer;
+    static thread_local uint32_t last_gen = 0;
 
-    for (auto& seg : g_segments) {
-        bool new_state = cpu->get_segments_state(seg.id[0], seg.id[1], seg.id[2]);
-        protect_blinking(seg, new_state);
-        seg.buffer_state = seg.state;
-        seg.state = new_state;
+    const uint32_t gen = g_seg_generation.load();
+    if (gen != last_gen) {
+        state.clear();
+        buffer.clear();
+        last_gen = gen;
+    }
+
+    {
+        std::lock_guard<std::mutex> snap_lock(g_segment_snapshot_mutex);
+        meta = g_segments_meta;
+        back = g_seg_on_back;
+    }
+
+    if (!meta || !back) {
+        cpu->segments_state_are_update = false;
+        return;
+    }
+
+    const size_t n = meta->size();
+    if (state.size() != n) state.assign(n, 0);
+    if (buffer.size() != n) buffer.assign(n, 0);
+    if (back->size() != n) back->assign(n, 0);
+
+    for (size_t i = 0; i < n; i++) {
+        const Segment& seg = (*meta)[i];
+        const bool new_state = cpu->get_segments_state(seg.id[0], seg.id[1], seg.id[2]);
+
+        bool s = state[i] != 0;
+        bool b = buffer[i] != 0;
+
+        // Same blink-protection behavior as 3DS renderer.
+        s = s && (new_state || b);
+        s = s || (new_state && b);
+
+        buffer[i] = s ? 1 : 0;
+        state[i] = new_state ? 1 : 0;
+        (*back)[i] = buffer[i];
+    }
+
+    // Publish the snapshot by swapping front/back pointers, but only if the generation
+    // didn't change mid-update (prevents cross-game contamination).
+    {
+        std::lock_guard<std::mutex> snap_lock(g_segment_snapshot_mutex);
+        if (g_seg_generation.load() == gen && g_seg_on_back == back) {
+            std::swap(g_seg_on_front, g_seg_on_back);
+        }
     }
 
     cpu->segments_state_are_update = false;
+}
+
+static void emu_thread_main() {
+    using clock = std::chrono::steady_clock;
+    constexpr auto tick = std::chrono::nanoseconds((long long)(1e9 / 60.0));
+    auto next = clock::now();
+
+    while (!g_emu_quit.load()) {
+        const bool can_run = (g_app_mode.load() == MODE_GAME) && g_emulation_running && !g_emulation_paused.load();
+        if (!can_run) {
+            std::unique_lock<std::mutex> lk(g_emu_sleep_mutex);
+            g_emu_cv.wait_for(lk, std::chrono::milliseconds(10));
+            next = clock::now();
+            continue;
+        }
+
+        next += tick;
+
+        {
+            std::lock_guard<std::mutex> cpu_lock(g_cpu_mutex);
+            if (g_cpu) {
+                const uint32_t ctl_mask = g_controller_mask.load();
+                const int touch_mask = g_action_mask.load();
+
+                if (g_input) {
+                    apply_controller_mask(ctl_mask, touch_mask);
+                } else {
+                    apply_action_mask(touch_mask);
+                }
+
+                // Decrement any short start pulses (apply_controller_mask ORs them in).
+                int a = g_gamea_pulse_frames.load();
+                if (a > 0) g_gamea_pulse_frames.store(a - 1);
+                int b = g_gameb_pulse_frames.load();
+                if (b > 0) g_gameb_pulse_frames.store(b - 1);
+
+                g_rate_accu += g_cpu->frequency;
+                uint32_t steps = (uint32_t)(g_rate_accu / kTargetFps);
+                g_rate_accu -= (uint32_t)(steps * kTargetFps);
+                while (steps > 0) {
+                    if (g_cpu->step()) {
+                        if (g_time_set_grace_counter > 0) {
+                            g_time_set_grace_counter--;
+                            g_cpu->time_set(false);
+                            set_time_cpu(g_cpu.get());
+                        }
+                        update_segments_from_cpu(g_cpu.get());
+                    }
+                    audio_update_step(g_cpu.get());
+                    steps--;
+                }
+            }
+        }
+
+        auto now = clock::now();
+        if (next > now) {
+            std::this_thread::sleep_until(next);
+        } else {
+            next = now;
+        }
+    }
+}
+
+static void ensure_emu_thread_started() {
+    bool expected = false;
+    if (!g_emu_thread_started.compare_exchange_strong(expected, true)) {
+        return;
+    }
+    g_emu_quit.store(false);
+    g_emu_thread = std::thread(emu_thread_main);
+}
+
+static void stop_emu_thread() {
+    g_emu_quit.store(true);
+    notify_emu_thread();
+    if (g_emu_thread.joinable()) {
+        g_emu_thread.join();
+    }
+    g_emu_thread_started.store(false);
 }
 
 static void append_rect_ndc(std::vector<RenderVertex>& out, float x, float y, float w, float h) {
@@ -1011,6 +1180,13 @@ Java_com_retrovalou_yokoi_MainActivity_nativeInit(JNIEnv*, jclass) {
         menu_select_game_by_index(idx);
         g_core_inited = true;
     }
+
+    ensure_emu_thread_started();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeShutdown(JNIEnv*, jclass) {
+    stop_emu_thread();
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -1030,6 +1206,7 @@ Java_com_retrovalou_yokoi_MainActivity_nativeGetAudioSampleRate(JNIEnv*, jclass)
     if (g_audio_sample_rate > 0) {
         return (jint)g_audio_sample_rate;
     }
+    std::lock_guard<std::mutex> cpu_lock(g_cpu_mutex);
     if (g_cpu) {
         uint16_t div = g_cpu->sound_divide_frequency ? (uint16_t)g_cpu->sound_divide_frequency : (uint16_t)1;
         int rate = (int)(g_cpu->frequency / (uint32_t)div);
@@ -1162,6 +1339,7 @@ Java_com_retrovalou_yokoi_MainActivity_nativeGetSelectedGameInfo(JNIEnv* env, jc
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_retrovalou_yokoi_MainActivity_nativeAutoSaveState(JNIEnv*, jclass) {
+    std::lock_guard<std::mutex> cpu_lock(g_cpu_mutex);
     if (g_app_mode.load() == MODE_GAME && g_cpu) {
         save_game_state(g_cpu.get(), g_game_index);
     }
@@ -1201,6 +1379,7 @@ Java_com_retrovalou_yokoi_MainActivity_nativeReturnToMenu(JNIEnv*, jclass) {
 extern "C" JNIEXPORT void JNICALL
 Java_com_retrovalou_yokoi_MainActivity_nativeSetPaused(JNIEnv*, jclass, jboolean paused) {
     g_emulation_paused.store(paused == JNI_TRUE);
+    notify_emu_thread();
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -1235,7 +1414,7 @@ static void render_frame(GlResources& r, int panel) {
     const int driver = g_emulation_driver_panel.load();
     const bool is_driver_panel = (driver == 0 && is_panel0) || (driver == 1 && is_panel1);
 
-    // Only the combined renderer or the configured driver panel advances emulation.
+    // Only the combined renderer or the configured driver panel handles menu input.
     if (is_combined || is_driver_panel) {
         static uint32_t prev_ctl_mask = 0;
         uint32_t ctl_mask = g_controller_mask.load();
@@ -1287,42 +1466,7 @@ static void render_frame(GlResources& r, int panel) {
             }
         }
 
-        // Game mode: always run CPU (GameA/GameB are just inputs).
-        if (mode == MODE_GAME && g_cpu) {
-            int touch_mask = g_action_mask.load();
-            if (g_input) {
-                apply_controller_mask(ctl_mask, touch_mask);
-            } else {
-                apply_action_mask(touch_mask);
-            }
-
-            // Decrement any short start pulses (apply_controller_mask ORs them in).
-            if (g_emulation_running) {
-                if (g_gamea_pulse_frames > 0) g_gamea_pulse_frames--;
-                if (g_gameb_pulse_frames > 0) g_gameb_pulse_frames--;
-            }
-
-            // Run CPU.
-            if (g_emulation_running && !g_emulation_paused.load()) {
-                g_rate_accu += g_cpu->frequency;
-                uint32_t steps = (uint32_t)(g_rate_accu / kTargetFps);
-                g_rate_accu -= (uint32_t)(steps * kTargetFps);
-                while (steps > 0) {
-                    if (g_cpu->step()) {
-                        // Match 3DS behavior: for a short period after game start, repeatedly
-                        // re-apply the host time because some games stomp their clock RAM.
-                        if (g_time_set_grace_counter > 0) {
-                            g_time_set_grace_counter--;
-                            g_cpu->time_set(false);
-                            set_time_cpu(g_cpu.get());
-                        }
-                        update_segments_from_cpu(g_cpu.get());
-                    }
-                    audio_update_step(g_cpu.get());
-                    steps--;
-                }
-            }
-        }
+        // Game mode stepping is handled by the dedicated emulation thread.
     }
 
     glUseProgram(r.program);
@@ -1554,7 +1698,16 @@ static void render_frame(GlResources& r, int panel) {
 
         static thread_local std::vector<RenderVertex> seg_verts;
         seg_verts.clear();
-        seg_verts.reserve(g_segments.size() * 6);
+        std::shared_ptr<const std::vector<Segment>> meta;
+        std::shared_ptr<std::vector<uint8_t>> on;
+        {
+            std::lock_guard<std::mutex> snap_lock(g_segment_snapshot_mutex);
+            meta = g_segments_meta;
+            on = g_seg_on_front;
+        }
+
+        const size_t seg_count = meta ? meta->size() : 0;
+        seg_verts.reserve(seg_count * 6);
 
         // 3DS-style segment marking/shadow passes are only for non-mask segment atlases.
         static thread_local std::vector<RenderVertex> seg_mark_verts;
@@ -1562,8 +1715,8 @@ static void render_frame(GlResources& r, int panel) {
         if (!is_mask) {
             seg_mark_verts.clear();
             seg_shadow_verts.clear();
-            seg_mark_verts.reserve(g_segments.size() * 6);
-            seg_shadow_verts.reserve(g_segments.size() * 6);
+            seg_mark_verts.reserve(seg_count * 6);
+            seg_shadow_verts.reserve(seg_count * 6);
         } else {
             seg_mark_verts.clear();
             seg_shadow_verts.clear();
@@ -1573,7 +1726,9 @@ static void render_frame(GlResources& r, int panel) {
         float texW = (float)g_segment_info[0];
         float texH = (float)g_segment_info[1];
 
-        for (const auto& seg : g_segments) {
+        if (meta) for (size_t si = 0; si < meta->size(); si++) {
+            const auto& seg = (*meta)[si];
+            const bool seg_on = (on && si < on->size()) ? ((*on)[si] != 0) : false;
             if (!is_combined) {
                 if (!g_split_two_screens_to_panels && is_panel1) {
                     continue;
@@ -1614,13 +1769,13 @@ static void render_frame(GlResources& r, int panel) {
                 append_quad_ndc_uv_canvas(seg_mark_verts, contentW, contentH, sx_local, sy_local, sw, sh, u0, v0, u1, v1);
 
                 // Shadow: draw only lit segments, slightly offset and darker.
-                if (seg.buffer_state) {
+                if (seg_on) {
                     append_quad_ndc_uv_canvas(seg_shadow_verts, contentW, contentH, sx_local + 2.0f, sy_local + 2.0f, sw, sh, u0, v0, u1, v1);
                 }
             }
 
             // Main lit segments.
-            if (seg.buffer_state) {
+            if (seg_on) {
                 append_quad_ndc_uv_canvas(seg_verts, contentW, contentH, sx_local, sy_local, sw, sh, u0, v0, u1, v1);
             }
         }
@@ -1749,10 +1904,16 @@ Java_com_retrovalou_yokoi_MainActivity_nativeTouch(JNIEnv*, jclass, jfloat x, jf
                     break;
                 }
                 if (left_half) {
-                    start_game_from_menu(false);
+                    {
+                        std::lock_guard<std::mutex> lock(g_render_mutex);
+                        start_game_from_menu(false);
+                    }
                 } else {
                     bool has = save_state_exists(g_game_index);
-                    start_game_from_menu(has);
+                    {
+                        std::lock_guard<std::mutex> lock(g_render_mutex);
+                        start_game_from_menu(has);
+                    }
                 }
                 break;
             }
@@ -1760,7 +1921,7 @@ Java_com_retrovalou_yokoi_MainActivity_nativeTouch(JNIEnv*, jclass, jfloat x, jf
                 // Center tap on the lower screen triggers GAME A; otherwise touch halves map to ACTION.
                 if (in_bottom_half && center_third) {
                     g_action_mask.store(0);
-                    g_gamea_pulse_frames = 8;
+                    g_gamea_pulse_frames.store(8);
                 } else {
                     g_action_mask.store(left_half ? 0x01 : 0x02);
                 }
