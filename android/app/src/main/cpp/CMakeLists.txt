@@ -15,8 +15,14 @@ file(GLOB_RECURSE YOKOI_STD_SRC
     "${YOKOI_ROOT}/source/std/*.cpp"
 )
 
+# NOTE: The broad std glob will also pick up generated ROM sources under
+# source/std/GW_ROM and source/std/GW_ROM_RGDS. We compile only one set
+# explicitly below, so exclude both from the std list to avoid duplicate symbols.
+list(FILTER YOKOI_STD_SRC EXCLUDE REGEX ".*[/\\\\]GW_ROM[/\\\\].*")
+list(FILTER YOKOI_STD_SRC EXCLUDE REGEX ".*[/\\\\]GW_ROM_RGDS[/\\\\].*")
+
 file(GLOB_RECURSE YOKOI_GW_ROM_SRC
-    "${YOKOI_ROOT}/source/std/GW_ROM/*.cpp"
+    "${YOKOI_ROOT}/source/std/GW_ROM_RGDS/*.cpp"
 )
 
 # Exclude 3DS-only/example sources if they slip in
@@ -32,7 +38,7 @@ add_library(yokoi SHARED
 target_include_directories(yokoi PRIVATE
     "${YOKOI_ROOT}/source"
     "${YOKOI_ROOT}/source/std"
-    "${YOKOI_ROOT}/source/std/GW_ROM"
+    "${YOKOI_ROOT}/source/std/GW_ROM_RGDS"
     "${YOKOI_ROOT}/source/SM5XX"
 )
 

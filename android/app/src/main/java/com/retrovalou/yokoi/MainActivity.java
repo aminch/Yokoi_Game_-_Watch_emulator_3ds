@@ -344,8 +344,10 @@ public final class MainActivity extends Activity {
     }
 
     private TextureInfo buildMenuUiTexture() {
-        final int w = 400;
-        final int h = 240;
+        // RGDS/Android: menu renders into a 640x480 logical panel.
+        final int w = 640;
+        final int h = 480;
+        final float s = w / 400.0f;
 
         Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bmp);
@@ -363,35 +365,35 @@ public final class MainActivity extends Activity {
         subPaint.setColor(Color.LTGRAY);
         subPaint.setTextAlign(Paint.Align.CENTER);
 
-        float titleSize = 34.0f;
+        float titleSize = 34.0f * s;
         titlePaint.setTextSize(titleSize);
-        while (titleSize > 18.0f && titlePaint.measureText(name) > (w - 20)) {
-            titleSize -= 2.0f;
+        while (titleSize > 18.0f * s && titlePaint.measureText(name) > (w - 20.0f * s)) {
+            titleSize -= 2.0f * s;
             titlePaint.setTextSize(titleSize);
         }
-        subPaint.setTextSize(18.0f);
+        subPaint.setTextSize(18.0f * s);
 
         float cx = w * 0.5f;
-        canvas.drawText(name, cx, 80.0f, titlePaint);
+        canvas.drawText(name, cx, 80.0f * s, titlePaint);
         if (!date.isEmpty()) {
-            canvas.drawText(date, cx, 112.0f, subPaint);
+            canvas.drawText(date, cx, 112.0f * s, subPaint);
         }
 
         int mode = nativeGetAppMode();
         if (mode == MODE_MENU_SELECT) {
             subPaint.setColor(Color.GRAY);
-            canvas.drawText("Left/Right: select", cx, 170.0f, subPaint);
-            canvas.drawText("Tap center or press A", cx, 200.0f, subPaint);
+            canvas.drawText("Left/Right: select", cx, 170.0f * s, subPaint);
+            canvas.drawText("Tap center or press A", cx, 200.0f * s, subPaint);
         } else if (mode == MODE_MENU_LOAD_PROMPT) {
             boolean hasSave = nativeMenuHasSaveState();
             int choice = nativeGetMenuLoadChoice();
 
             subPaint.setColor(Color.WHITE);
-            canvas.drawText("Start:", cx, 160.0f, subPaint);
+            canvas.drawText("Start:", cx, 160.0f * s, subPaint);
 
             Paint optPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             optPaint.setTextAlign(Paint.Align.CENTER);
-            optPaint.setTextSize(20.0f);
+            optPaint.setTextSize(20.0f * s);
             optPaint.setColor(Color.LTGRAY);
 
             String left = (choice == 0) ? "> Load fresh" : "Load fresh";
@@ -399,12 +401,12 @@ public final class MainActivity extends Activity {
                     ? ((choice == 1) ? "> Load savestate" : "Load savestate")
                     : "No savestate";
 
-            canvas.drawText(left, w * 0.25f, 205.0f, optPaint);
-            canvas.drawText(right, w * 0.75f, 205.0f, optPaint);
+            canvas.drawText(left, w * 0.25f, 205.0f * s, optPaint);
+            canvas.drawText(right, w * 0.75f, 205.0f * s, optPaint);
 
             subPaint.setColor(Color.GRAY);
-            subPaint.setTextSize(16.0f);
-            canvas.drawText("B: back", cx, 232.0f, subPaint);
+            subPaint.setTextSize(16.0f * s);
+            canvas.drawText("B: back", cx, 232.0f * s, subPaint);
         }
 
         return loadTextureFromBitmap(bmp);

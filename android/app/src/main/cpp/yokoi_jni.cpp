@@ -553,9 +553,9 @@ static void rebuild_layout_for_menu() {
     // - Bottom: console image
     g_split_two_screens_to_panels = false;
 
-    // Match 3DS top screen logical size for consistent UI.
-    g_top_canvas_w = 400.0f;
-    g_top_canvas_h = 240.0f;
+    // RGDS/Android UI canvas: treat each panel as a 640x480 surface.
+    g_top_canvas_w = 640.0f;
+    g_top_canvas_h = 480.0f;
 
     // Bottom size based on the selected game's console image.
     g_bottom_canvas_w = 0.0f;

@@ -39,8 +39,9 @@ android {
 
     sourceSets {
         main {
-            // Reuse the existing converted PNG artwork without copying.
-            assets.srcDirs += ['../../gfx']
+            // Android/RGDS uses the 2x artwork set.
+            // The generated RGDS metadata (UVs/sizes) expects these textures.
+            assets.srcDirs += ['../../gfx2x']
         }
     }
 }

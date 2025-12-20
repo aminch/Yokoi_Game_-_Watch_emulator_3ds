@@ -1,5 +1,9 @@
 #include "load_file.h"
+#if defined(__ANDROID__)
+#include "GW_ALL_rgds.h"
+#else
 #include "GW_ALL.h"
+#endif
 
 
 const GW_rom* load_game(uint8_t i_game){

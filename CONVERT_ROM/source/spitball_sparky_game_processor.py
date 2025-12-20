@@ -4,8 +4,8 @@ from source.games_path_utils import GamesPathUpdater
 from source.game_processor import GameProcessor
 
 class SpitballSparkyGameProcessor(GameProcessor):
-	def __init__(self):
-		super().__init__()
+	def __init__(self, target_name: str = "3ds"):
+		super().__init__(target_name)
 
 		# Specifics for Spitball Sparky
 		self.game_key = "Spitball_Sparky" # Key from games_path.py
