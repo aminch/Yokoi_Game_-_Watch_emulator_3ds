@@ -4,8 +4,11 @@ import android.app.Activity;
 import android.app.Presentation;
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Paint;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -42,6 +45,13 @@ public final class MainActivity extends Activity {
             int segmentTex, int segmentW, int segmentH,
             int backgroundTex, int backgroundW, int backgroundH,
             int consoleTex, int consoleW, int consoleH);
+        private static native void nativeSetUiTexture(int uiTex, int uiW, int uiH);
+        private static native int nativeGetAppMode();
+        private static native int nativeGetMenuLoadChoice();
+        private static native boolean nativeMenuHasSaveState();
+        private static native String[] nativeGetSelectedGameInfo();
+        private static native void nativeAutoSaveState();
+        private static native void nativeReturnToMenu();
     private static native void nativeResize(int width, int height);
     private static native void nativeRender();
     private static native void nativeRenderPanel(int panel);
@@ -57,11 +67,17 @@ public final class MainActivity extends Activity {
     private int lastSegTexId;
     private int lastBgTexId;
     private int lastCsTexId;
+    private int lastUiTexId;
 
     private DisplayManager displayManager;
     private SecondScreenPresentation secondPresentation;
     private GLSurfaceView secondGlView;
     private volatile boolean dualDisplayEnabled;
+
+    // Must match native AppMode enum in yokoi_jni.cpp
+    private static final int MODE_MENU_SELECT = 0;
+    private static final int MODE_MENU_LOAD_PROMPT = 1;
+    private static final int MODE_GAME = 2;
 
     // Controller bitmask must match native ControllerBits in yokoi_jni.cpp
     private static final int CTL_DPAD_UP = 1 << 0;
@@ -123,6 +139,10 @@ public final class MainActivity extends Activity {
 
     private final class SecondScreenPresentation extends Presentation {
         private int secondTextureGeneration;
+        private int secondUiTexId;
+        private int uiLastGen;
+        private int uiLastMode;
+        private int uiLastChoice;
 
         SecondScreenPresentation(Context outerContext, Display display) {
             super(outerContext, display);
@@ -155,7 +175,14 @@ public final class MainActivity extends Activity {
                             bg.id, bg.width, bg.height,
                             cs.id, cs.width, cs.height);
 
+                        TextureInfo ui = buildMenuUiTexture();
+                        secondUiTexId = ui.id;
+                        nativeSetUiTexture(ui.id, ui.width, ui.height);
+
                     secondTextureGeneration = nativeGetTextureGeneration();
+                        uiLastGen = secondTextureGeneration;
+                        uiLastMode = nativeGetAppMode();
+                        uiLastChoice = nativeGetMenuLoadChoice();
                 }
 
                 @Override
@@ -184,7 +211,33 @@ public final class MainActivity extends Activity {
                                 seg.id, seg.width, seg.height,
                                 bg.id, bg.width, bg.height,
                                 cs.id, cs.width, cs.height);
+
+                        if (secondUiTexId != 0) {
+                            int[] t = new int[]{secondUiTexId};
+                            GLES30.glDeleteTextures(1, t, 0);
+                            secondUiTexId = 0;
+                        }
+                        TextureInfo ui = buildMenuUiTexture();
+                        secondUiTexId = ui.id;
+                        nativeSetUiTexture(ui.id, ui.width, ui.height);
                         secondTextureGeneration = gen;
+                        uiLastGen = gen;
+                    }
+
+                    int mode = nativeGetAppMode();
+                    int choice = nativeGetMenuLoadChoice();
+                    if (mode != MODE_GAME && (mode != uiLastMode || choice != uiLastChoice || gen != uiLastGen)) {
+                        if (secondUiTexId != 0) {
+                            int[] t = new int[]{secondUiTexId};
+                            GLES30.glDeleteTextures(1, t, 0);
+                            secondUiTexId = 0;
+                        }
+                        TextureInfo ui = buildMenuUiTexture();
+                        secondUiTexId = ui.id;
+                        nativeSetUiTexture(ui.id, ui.width, ui.height);
+                        uiLastMode = mode;
+                        uiLastChoice = choice;
+                        uiLastGen = gen;
                     }
 
                     // Secondary (physical top) display: render the TOP panel.
@@ -259,6 +312,104 @@ public final class MainActivity extends Activity {
         return new TextureInfo(texId, w, h);
     }
 
+    private TextureInfo loadTextureFromBitmap(Bitmap bitmap) {
+        if (bitmap == null) {
+            return new TextureInfo(0, 0, 0);
+        }
+
+        if (bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
+            Bitmap converted = bitmap.copy(Bitmap.Config.ARGB_8888, false);
+            bitmap.recycle();
+            bitmap = converted;
+        }
+
+        int[] tex = new int[1];
+        GLES30.glGenTextures(1, tex, 0);
+        int texId = tex[0];
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texId);
+
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1);
+        GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0);
+
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+        bitmap.recycle();
+
+        return new TextureInfo(texId, w, h);
+    }
+
+    private TextureInfo buildMenuUiTexture() {
+        final int w = 400;
+        final int h = 240;
+
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+        canvas.drawColor(Color.BLACK);
+
+        String[] info = nativeGetSelectedGameInfo();
+        String name = (info != null && info.length > 0) ? info[0] : "";
+        String date = (info != null && info.length > 1) ? info[1] : "";
+
+        Paint titlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        titlePaint.setColor(Color.WHITE);
+        titlePaint.setTextAlign(Paint.Align.CENTER);
+
+        Paint subPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        subPaint.setColor(Color.LTGRAY);
+        subPaint.setTextAlign(Paint.Align.CENTER);
+
+        float titleSize = 34.0f;
+        titlePaint.setTextSize(titleSize);
+        while (titleSize > 18.0f && titlePaint.measureText(name) > (w - 20)) {
+            titleSize -= 2.0f;
+            titlePaint.setTextSize(titleSize);
+        }
+        subPaint.setTextSize(18.0f);
+
+        float cx = w * 0.5f;
+        canvas.drawText(name, cx, 80.0f, titlePaint);
+        if (!date.isEmpty()) {
+            canvas.drawText(date, cx, 112.0f, subPaint);
+        }
+
+        int mode = nativeGetAppMode();
+        if (mode == MODE_MENU_SELECT) {
+            subPaint.setColor(Color.GRAY);
+            canvas.drawText("Left/Right: select", cx, 170.0f, subPaint);
+            canvas.drawText("Tap center or press A", cx, 200.0f, subPaint);
+        } else if (mode == MODE_MENU_LOAD_PROMPT) {
+            boolean hasSave = nativeMenuHasSaveState();
+            int choice = nativeGetMenuLoadChoice();
+
+            subPaint.setColor(Color.WHITE);
+            canvas.drawText("Start:", cx, 160.0f, subPaint);
+
+            Paint optPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            optPaint.setTextAlign(Paint.Align.CENTER);
+            optPaint.setTextSize(20.0f);
+            optPaint.setColor(Color.LTGRAY);
+
+            String left = (choice == 0) ? "> Load fresh" : "Load fresh";
+            String right = hasSave
+                    ? ((choice == 1) ? "> Load savestate" : "Load savestate")
+                    : "No savestate";
+
+            canvas.drawText(left, w * 0.25f, 205.0f, optPaint);
+            canvas.drawText(right, w * 0.75f, 205.0f, optPaint);
+
+            subPaint.setColor(Color.GRAY);
+            subPaint.setTextSize(16.0f);
+            canvas.drawText("B: back", cx, 232.0f, subPaint);
+        }
+
+        return loadTextureFromBitmap(bmp);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -274,6 +425,9 @@ public final class MainActivity extends Activity {
         glView.setPreserveEGLContextOnPause(true);
         glView.setRenderer(new GLSurfaceView.Renderer() {
             private int textureGeneration;
+            private int uiLastGen = -1;
+            private int uiLastMode = -1;
+            private int uiLastChoice = -1;
 
             @Override
             public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl, javax.microedition.khronos.egl.EGLConfig config) {
@@ -297,9 +451,16 @@ public final class MainActivity extends Activity {
                         seg.id, seg.width, seg.height,
                         bg.id, bg.width, bg.height,
                         cs.id, cs.width, cs.height);
+
+                TextureInfo ui = buildMenuUiTexture();
+                lastUiTexId = ui.id;
+                nativeSetUiTexture(ui.id, ui.width, ui.height);
                 startAudioIfNeeded();
 
                 textureGeneration = nativeGetTextureGeneration();
+                uiLastGen = textureGeneration;
+                uiLastMode = nativeGetAppMode();
+                uiLastChoice = nativeGetMenuLoadChoice();
 
                 // Attempt to start a second physical display if present.
                     runOnUiThread(() -> {
@@ -317,7 +478,7 @@ public final class MainActivity extends Activity {
             public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl) {
                 int gen = nativeGetTextureGeneration();
                 if (gen != textureGeneration) {
-                    int[] ids = new int[]{lastSegTexId, lastBgTexId, lastCsTexId};
+                    int[] ids = new int[]{lastSegTexId, lastBgTexId, lastCsTexId, lastUiTexId};
                     for (int id : ids) {
                         if (id != 0) {
                             int[] t = new int[]{id};
@@ -327,6 +488,7 @@ public final class MainActivity extends Activity {
                     lastSegTexId = 0;
                     lastBgTexId = 0;
                     lastCsTexId = 0;
+                    lastUiTexId = 0;
 
                     String[] names = nativeGetTextureAssetNames();
                     String segName = (names != null && names.length > 0) ? names[0] : "";
@@ -346,10 +508,31 @@ public final class MainActivity extends Activity {
                             bg.id, bg.width, bg.height,
                             cs.id, cs.width, cs.height);
 
+                        TextureInfo ui = buildMenuUiTexture();
+                        lastUiTexId = ui.id;
+                        nativeSetUiTexture(ui.id, ui.width, ui.height);
+
                     stopAudio();
                     startAudioIfNeeded();
 
                     textureGeneration = gen;
+                    uiLastGen = gen;
+                }
+
+                int mode = nativeGetAppMode();
+                int choice = nativeGetMenuLoadChoice();
+                if (mode != MODE_GAME && (mode != uiLastMode || choice != uiLastChoice || gen != uiLastGen)) {
+                    if (lastUiTexId != 0) {
+                        int[] t = new int[]{lastUiTexId};
+                        GLES30.glDeleteTextures(1, t, 0);
+                        lastUiTexId = 0;
+                    }
+                    TextureInfo ui = buildMenuUiTexture();
+                    lastUiTexId = ui.id;
+                    nativeSetUiTexture(ui.id, ui.width, ui.height);
+                    uiLastMode = mode;
+                    uiLastChoice = choice;
+                    uiLastGen = gen;
                 }
 
                 if (dualDisplayEnabled) {
@@ -667,6 +850,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        nativeAutoSaveState();
         glView.onPause();
         if (secondGlView != null) {
             secondGlView.onPause();
@@ -692,5 +876,15 @@ public final class MainActivity extends Activity {
     protected void onDestroy() {
         stopSecondDisplay();
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        int mode = nativeGetAppMode();
+        if (mode == MODE_GAME) {
+            nativeReturnToMenu();
+            return;
+        }
+        super.onBackPressed();
     }
 }

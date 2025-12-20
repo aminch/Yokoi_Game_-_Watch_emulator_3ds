@@ -17,6 +17,7 @@
 #include "std/GW_ROM.h"
 #include "std/platform_paths.h"
 #include "std/settings.h"
+#include "std/savestate.h"
 #include "std/load_file.h"
 
 #include "virtual_i_o/virtual_input.h"
@@ -84,12 +85,15 @@ struct GlResources {
     GLuint tex_segments = 0;
     GLuint tex_background = 0;
     GLuint tex_console = 0;
+    GLuint tex_ui = 0;
     int tex_segments_w = 0;
     int tex_segments_h = 0;
     int tex_background_w = 0;
     int tex_background_h = 0;
     int tex_console_w = 0;
     int tex_console_h = 0;
+    int tex_ui_w = 0;
+    int tex_ui_h = 0;
 };
 
 std::mutex g_gl_mutex;
@@ -118,8 +122,18 @@ bool g_split_two_screens_to_panels = false;
 
 bool g_emulation_running = false;
 int g_gamea_pulse_frames = 0;
+int g_gameb_pulse_frames = 0;
 bool g_left_action_down = false;
 bool g_right_action_down = false;
+
+enum AppMode : int {
+    MODE_MENU_SELECT = 0,
+    MODE_MENU_LOAD_PROMPT = 1,
+    MODE_GAME = 2,
+};
+
+std::atomic<int> g_app_mode{MODE_MENU_SELECT};
+std::atomic<int> g_menu_load_choice{0}; // 0=fresh, 1=load savestate
 
 std::atomic<int> g_pending_game_delta{0};
 std::atomic<bool> g_start_requested{false};
@@ -533,6 +547,54 @@ static void rebuild_layout_from_game() {
     g_bottom_off_y = g_top_canvas_h;
 }
 
+static void rebuild_layout_for_menu() {
+    // Menu always renders as two stacked panels:
+    // - Top: game name/year (provided by Java UI texture)
+    // - Bottom: console image
+    g_split_two_screens_to_panels = false;
+
+    // Match 3DS top screen logical size for consistent UI.
+    g_top_canvas_w = 400.0f;
+    g_top_canvas_h = 240.0f;
+
+    // Bottom size based on the selected game's console image.
+    g_bottom_canvas_w = 0.0f;
+    g_bottom_canvas_h = 0.0f;
+    if (g_game && g_game->segment_info) {
+        uint16_t scale = g_game->segment_info[2] ? g_game->segment_info[2] : 1;
+        g_segment_info[2] = scale;
+        if (g_game->console_info) {
+            g_bottom_canvas_w = (float)g_game->console_info[4] / (float)scale;
+            g_bottom_canvas_h = (float)g_game->console_info[5] / (float)scale;
+        }
+    }
+
+    g_combined_canvas_w = std::max(g_top_canvas_w, g_bottom_canvas_w);
+    if (g_combined_canvas_w < 1.0f) {
+        g_combined_canvas_w = 1.0f;
+    }
+    g_combined_canvas_h = g_top_canvas_h + g_bottom_canvas_h;
+    if (g_combined_canvas_h < 1.0f) {
+        g_combined_canvas_h = 1.0f;
+    }
+
+    g_top_off_x = (g_combined_canvas_w - g_top_canvas_w) * 0.5f;
+    g_bottom_off_x = (g_combined_canvas_w - g_bottom_canvas_w) * 0.5f;
+    g_bottom_off_y = g_top_canvas_h;
+}
+
+static void menu_select_game_by_index(uint8_t idx) {
+    g_game_index = idx;
+    g_game = load_game(idx);
+    if (!g_game) {
+        __android_log_write(ANDROID_LOG_ERROR, kLogTag, "menu_select_game: load_game failed");
+        return;
+    }
+    save_last_game(get_name(idx));
+    rebuild_layout_for_menu();
+    g_texture_generation.fetch_add(1);
+}
+
 static uint8_t find_game_index_by_ref(const std::string& ref) {
     size_t n = get_nb_name();
     if (n > 255) n = 255;
@@ -595,8 +657,8 @@ static void apply_controller_mask(uint32_t ctl_mask, int touch_action_mask) {
     // Match 3DS mapping from source/main.cpp::input_get()
     // Setup buttons.
     g_input->set_input(PART_SETUP, BUTTON_TIME, l1);
-    g_input->set_input(PART_SETUP, BUTTON_GAMEA, start);
-    g_input->set_input(PART_SETUP, BUTTON_GAMEB, select);
+    g_input->set_input(PART_SETUP, BUTTON_GAMEA, start || (g_gamea_pulse_frames > 0));
+    g_input->set_input(PART_SETUP, BUTTON_GAMEB, select || (g_gameb_pulse_frames > 0));
 
     // Left controls.
     if (g_input->left_configuration == CONF_1_BUTTON_ACTION) {
@@ -637,12 +699,15 @@ static void apply_controller_mask(uint32_t ctl_mask, int touch_action_mask) {
 static void reset_runtime_state_for_new_game() {
     g_emulation_running = false;
     g_gamea_pulse_frames = 0;
+    g_gameb_pulse_frames = 0;
     g_left_action_down = false;
     g_right_action_down = false;
     g_action_mask.store(0);
     g_start_requested.store(false);
     g_rate_accu = 0;
 }
+
+static void update_segments_from_cpu(SM5XX* cpu);
 
 static void load_game_by_index_and_init(uint8_t idx) {
     g_game_index = idx;
@@ -680,17 +745,74 @@ static void load_game_by_index_and_init(uint8_t idx) {
         }
     }
 
+    // Ensure we display a valid initial frame immediately after load.
+    g_cpu->segments_state_are_update = true;
+    update_segments_from_cpu(g_cpu.get());
+
     reset_runtime_state_for_new_game();
     g_texture_generation.fetch_add(1);
 
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "Loaded game: %s (%s)", g_game->name.c_str(), g_game->ref.c_str());
 }
 
-static void load_game0_and_init_cpu() {
-    // Default game for Android: Donkey Kong II.
-    // (Ball is index 0; we keep that as the safe fallback.)
-    uint8_t idx = find_game_index_by_ref("JR_55");
+static uint8_t get_default_game_index_for_android() {
+    // Prefer last selected game; fall back to Donkey Kong II.
+    uint8_t idx = load_last_game_index();
+    size_t n = get_nb_name();
+    if (n == 0) {
+        return 0;
+    }
+    if (idx >= (uint8_t)n) {
+        idx = 0;
+    }
+    if (idx == 0) {
+        idx = find_game_index_by_ref("JR_55");
+    }
+    return idx;
+}
+
+static void start_game_from_menu(bool load_state) {
+    const uint8_t idx = g_game_index;
     load_game_by_index_and_init(idx);
+
+    g_app_mode.store(MODE_GAME);
+    // 3DS behavior: once loaded, the CPU runs (segments/time work) but the user still has to
+    // press GameA/GameB to start a game mode.
+    g_emulation_running = true;
+    g_gamea_pulse_frames = 0;
+    g_gameb_pulse_frames = 0;
+
+    if (load_state) {
+        if (!load_game_state(g_cpu.get(), idx)) {
+            __android_log_print(ANDROID_LOG_WARN, kLogTag, "No savestate to load for game %u", (unsigned)idx);
+        } else {
+            if (g_cpu) {
+                g_cpu->segments_state_are_update = true;
+                update_segments_from_cpu(g_cpu.get());
+            }
+        }
+    }
+}
+
+static void return_to_menu_from_game() {
+    // Save progress if we were in a game.
+    if (g_app_mode.load() == MODE_GAME && g_cpu) {
+        save_game_state(g_cpu.get(), g_game_index);
+    }
+
+    g_emulation_running = false;
+    g_action_mask.store(0);
+    g_start_requested.store(false);
+    g_gamea_pulse_frames = 0;
+    g_gameb_pulse_frames = 0;
+
+    g_cpu.reset();
+    g_input.reset();
+    g_segments.clear();
+
+    g_app_mode.store(MODE_MENU_SELECT);
+    g_menu_load_choice.store(0);
+    menu_select_game_by_index(g_game_index);
 }
 
 static void update_segments_from_cpu(SM5XX* cpu) {
@@ -843,7 +965,11 @@ Java_com_retrovalou_yokoi_MainActivity_nativeInit(JNIEnv*, jclass) {
         logi_str("Storage root: " + storage_root());
         logi_str("Games detected: " + std::to_string(get_nb_name()));
 
-        load_game0_and_init_cpu();
+        // Start in menu mode like the 3DS app.
+        g_app_mode.store(MODE_MENU_SELECT);
+        g_menu_load_choice.store(0);
+        uint8_t idx = get_default_game_index_for_android();
+        menu_select_game_by_index(idx);
         g_core_inited = true;
     }
 }
@@ -957,6 +1083,58 @@ Java_com_retrovalou_yokoi_MainActivity_nativeSetTextures(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeSetUiTexture(
+        JNIEnv*, jclass,
+        jint uiTex, jint uiW, jint uiH) {
+    GlResources* r = get_or_create_gl_for_current_context();
+    if (!r) {
+        return;
+    }
+    r->tex_ui = (GLuint)uiTex;
+    r->tex_ui_w = (int)uiW;
+    r->tex_ui_h = (int)uiH;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeGetAppMode(JNIEnv*, jclass) {
+    return (jint)g_app_mode.load();
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeGetMenuLoadChoice(JNIEnv*, jclass) {
+    return (jint)g_menu_load_choice.load();
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeMenuHasSaveState(JNIEnv*, jclass) {
+    return save_state_exists(g_game_index) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeGetSelectedGameInfo(JNIEnv* env, jclass) {
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray arr = env->NewObjectArray(2, stringClass, env->NewStringUTF(""));
+    std::string name = get_name(g_game_index);
+    std::string date = get_date(g_game_index);
+    env->SetObjectArrayElement(arr, 0, env->NewStringUTF(name.c_str()));
+    env->SetObjectArrayElement(arr, 1, env->NewStringUTF(date.c_str()));
+    return arr;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeAutoSaveState(JNIEnv*, jclass) {
+    if (g_app_mode.load() == MODE_GAME && g_cpu) {
+        save_game_state(g_cpu.get(), g_game_index);
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_retrovalou_yokoi_MainActivity_nativeReturnToMenu(JNIEnv*, jclass) {
+    std::lock_guard<std::mutex> lock(g_render_mutex);
+    return_to_menu_from_game();
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_retrovalou_yokoi_MainActivity_nativeResize(JNIEnv*, jclass, jint width, jint height) {
     GlResources* r = get_or_create_gl_for_current_context();
     if (!r) {
@@ -972,11 +1150,14 @@ static void render_frame(GlResources& r, int panel) {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    if (!g_cpu || r.program == 0) {
+    if (r.program == 0) {
         return;
     }
 
     std::lock_guard<std::mutex> lock(g_render_mutex);
+
+    const int mode = g_app_mode.load();
+    const bool is_menu = (mode != MODE_GAME);
 
     const bool is_combined = (panel < 0);
     const bool is_panel0 = (panel == 0);
@@ -993,79 +1174,77 @@ static void render_frame(GlResources& r, int panel) {
         prev_ctl_mask = ctl_mask;
 
         // Apply queued game switches on the GL thread (avoids races with the renderer).
+        // In menu mode, this changes the selection. In game mode, ignore.
         int delta = g_pending_game_delta.exchange(0);
-        if (delta != 0) {
+        if (delta != 0 && mode == MODE_MENU_SELECT) {
             size_t n = get_nb_name();
             if (n > 0) {
                 int cur = (int)g_game_index;
                 int next = cur + delta;
                 while (next < 0) next += (int)n;
                 next = next % (int)n;
-                load_game_by_index_and_init((uint8_t)next);
+                menu_select_game_by_index((uint8_t)next);
             }
         }
 
-        // Controller pre-game behavior mirrors 3DS menu:
-        // - DPAD left/right changes game
-        // - A/B/X/Y/START starts gameplay
-        if (!g_emulation_running) {
+        // Controller behavior in menu.
+        if (mode == MODE_MENU_SELECT) {
             if (ctl_down & CTL_DPAD_RIGHT) {
                 g_pending_game_delta.fetch_add(1);
             }
             if (ctl_down & CTL_DPAD_LEFT) {
                 g_pending_game_delta.fetch_sub(1);
             }
-
-            if (ctl_down & (CTL_A | CTL_B | CTL_X | CTL_Y | CTL_START)) {
-                g_start_requested.store(true);
+            if (ctl_down & CTL_A) {
+                g_menu_load_choice.store(0);
+                g_app_mode.store(MODE_MENU_LOAD_PROMPT);
+            }
+        } else if (mode == MODE_MENU_LOAD_PROMPT) {
+            if (ctl_down & (CTL_DPAD_LEFT | CTL_DPAD_RIGHT)) {
+                int choice = g_menu_load_choice.load();
+                choice = (choice == 0) ? 1 : 0;
+                // If no savestate exists, force choice to fresh.
+                if (choice == 1 && !save_state_exists(g_game_index)) {
+                    choice = 0;
+                }
+                g_menu_load_choice.store(choice);
+            }
+            if (ctl_down & CTL_B) {
+                g_app_mode.store(MODE_MENU_SELECT);
+            }
+            if (ctl_down & CTL_A) {
+                const bool want_load = (g_menu_load_choice.load() != 0) && save_state_exists(g_game_index);
+                start_game_from_menu(want_load);
             }
         }
 
-        // Start gameplay only when requested (middle tap).
-        if (g_start_requested.exchange(false) && !g_emulation_running) {
-            g_emulation_running = true;
-            g_gamea_pulse_frames = 8; // ~130ms at 60fps
+        // Game mode: always run CPU (GameA/GameB are just inputs).
+        if (mode == MODE_GAME && g_cpu) {
+            int touch_mask = g_action_mask.load();
             if (g_input) {
-                g_input->set_input(PART_SETUP, BUTTON_GAMEA, true);
+                apply_controller_mask(ctl_mask, touch_mask);
             } else {
-                g_cpu->input_set(0, 2, true);
+                apply_action_mask(touch_mask);
             }
-        }
 
-        // Apply inputs every frame so releases are propagated.
-        // This mirrors the 3DS mapping and also ORs in touch ACTION halves.
-        // Important: even if ctl_mask becomes 0, we still apply it to clear any
-        // previously-pressed directions/buttons.
-        int touch_mask = g_action_mask.load();
-        if (g_input) {
-            apply_controller_mask(ctl_mask, touch_mask);
-        } else {
-            apply_action_mask(touch_mask);
-        }
-
-        // Release the short GAME A press after a few frames.
-        if (g_gamea_pulse_frames > 0 && g_emulation_running) {
-            g_gamea_pulse_frames--;
-            if (g_gamea_pulse_frames == 0) {
-                if (g_input) {
-                    g_input->set_input(PART_SETUP, BUTTON_GAMEA, false);
-                } else {
-                    g_cpu->input_set(0, 2, false);
-                }
+            // Decrement any short start pulses (apply_controller_mask ORs them in).
+            if (g_emulation_running) {
+                if (g_gamea_pulse_frames > 0) g_gamea_pulse_frames--;
+                if (g_gameb_pulse_frames > 0) g_gameb_pulse_frames--;
             }
-        }
 
-        // Run CPU for this frame only after the first touch.
-        if (g_emulation_running) {
-            g_rate_accu += g_cpu->frequency;
-            uint32_t steps = (uint32_t)(g_rate_accu / kTargetFps);
-            g_rate_accu -= (uint32_t)(steps * kTargetFps);
-            while (steps > 0) {
-                if (g_cpu->step()) {
-                    update_segments_from_cpu(g_cpu.get());
+            // Run CPU.
+            if (g_emulation_running) {
+                g_rate_accu += g_cpu->frequency;
+                uint32_t steps = (uint32_t)(g_rate_accu / kTargetFps);
+                g_rate_accu -= (uint32_t)(steps * kTargetFps);
+                while (steps > 0) {
+                    if (g_cpu->step()) {
+                        update_segments_from_cpu(g_cpu.get());
+                    }
+                    audio_update_step(g_cpu.get());
+                    steps--;
                 }
-                audio_update_step(g_cpu.get());
-                steps--;
             }
         }
     }
@@ -1150,7 +1329,36 @@ static void render_frame(GlResources& r, int panel) {
     float bgc = ((bg >> 8) & 0xFF) / 255.0f;
     float bb = (bg & 0xFF) / 255.0f;
 
-    const bool panel_is_game = is_combined || is_panel0 || (g_split_two_screens_to_panels && is_panel1);
+    const bool panel_is_game = (!is_menu) && (is_combined || is_panel0 || (g_split_two_screens_to_panels && is_panel1));
+
+    // Menu UI layer (top panel): Java-provided texture.
+    if (is_menu && r.tex_ui != 0 && r.tex_ui_w > 0 && r.tex_ui_h > 0) {
+        // Draw only on top panel, or on combined canvas in the top region.
+        const bool want_ui = is_combined || is_panel0;
+        if (want_ui) {
+            glUniform4f(r.uMul, 1.0f, 1.0f, 1.0f, 1.0f);
+            std::vector<RenderVertex> ui_verts;
+            ui_verts.reserve(6);
+
+            float u0 = 0.0f, u1 = 1.0f;
+            float v0 = 0.0f, v1 = 1.0f;
+            if (kUvFlipV) {
+                v0 = 1.0f;
+                v1 = 0.0f;
+            }
+
+            float dx = 0.0f;
+            float dy = 0.0f;
+            float dw = g_top_canvas_w;
+            float dh = g_top_canvas_h;
+            if (is_combined) {
+                dx = to_local_x(g_top_off_x);
+                dy = to_local_y(0.0f);
+            }
+            append_quad_ndc_uv_canvas(ui_verts, contentW, contentH, dx, dy, dw, dh, u0, v0, u1, v1);
+            draw_vertices(r.tex_ui, ui_verts);
+        }
+    }
 
     if (panel_is_game && r.tex_white != 0) {
         glUniform4f(r.uMul, br, bgc, bb, 1.0f);
@@ -1325,40 +1533,61 @@ Java_com_retrovalou_yokoi_MainActivity_nativeRenderPanel(JNIEnv*, jclass, jint p
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_retrovalou_yokoi_MainActivity_nativeTouch(JNIEnv*, jclass, jfloat x, jfloat y, jint action) {
-    (void)x;
-    (void)y;
-    if (!g_cpu) {
-        return;
-    }
-
     const float w = (g_touch_width > 0) ? (float)g_touch_width : 1.0f;
+    const float h = (g_touch_height > 0) ? (float)g_touch_height : 1.0f;
     const float xf = x / w;
+    const float yf = y / h;
+    const bool in_bottom_half = (yf >= 0.5f);
     const bool left_third = xf < (1.0f / 3.0f);
     const bool right_third = xf > (2.0f / 3.0f);
     const bool left_half = xf < 0.5f;
+    const bool center_third = (!left_third && !right_third);
+
+    const int mode = g_app_mode.load();
 
     switch (action) {
         case 0: // MotionEvent.ACTION_DOWN
         case 5: // MotionEvent.ACTION_POINTER_DOWN
-            if (!g_emulation_running) {
-                // Pre-game controls: left=previous, middle=start, right=next.
+            if (mode == MODE_MENU_SELECT) {
+                if (!in_bottom_half) {
+                    break;
+                }
                 if (left_third) {
                     g_pending_game_delta.fetch_sub(1);
                 } else if (right_third) {
                     g_pending_game_delta.fetch_add(1);
                 } else {
-                    g_start_requested.store(true);
+                    // Center tap on lower screen: open load prompt.
+                    g_menu_load_choice.store(0);
+                    g_app_mode.store(MODE_MENU_LOAD_PROMPT);
                 }
-                // Ensure gameplay buttons aren't stuck.
-                g_action_mask.store(0);
-            } else {
-                // Gameplay controls: touch halves map to left/right action.
-                g_action_mask.store(left_half ? 0x01 : 0x02);
+                break;
+            }
+            if (mode == MODE_MENU_LOAD_PROMPT) {
+                if (!in_bottom_half) {
+                    break;
+                }
+                if (left_half) {
+                    start_game_from_menu(false);
+                } else {
+                    bool has = save_state_exists(g_game_index);
+                    start_game_from_menu(has);
+                }
+                break;
+            }
+            if (mode == MODE_GAME) {
+                // Center tap on the lower screen triggers GAME A; otherwise touch halves map to ACTION.
+                if (in_bottom_half && center_third) {
+                    g_action_mask.store(0);
+                    g_gamea_pulse_frames = 8;
+                } else {
+                    g_action_mask.store(left_half ? 0x01 : 0x02);
+                }
             }
             break;
 
         case 2: // MotionEvent.ACTION_MOVE
-            if (g_emulation_running) {
+            if (mode == MODE_GAME) {
                 g_action_mask.store(left_half ? 0x01 : 0x02);
             }
             break;
@@ -1366,7 +1595,9 @@ Java_com_retrovalou_yokoi_MainActivity_nativeTouch(JNIEnv*, jclass, jfloat x, jf
         case 1: // MotionEvent.ACTION_UP
         case 6: // MotionEvent.ACTION_POINTER_UP
         case 3: // MotionEvent.ACTION_CANCEL
-            g_action_mask.store(0);
+            if (mode == MODE_GAME) {
+                g_action_mask.store(0);
+            }
             break;
 
         default:
