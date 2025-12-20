@@ -38,3 +38,6 @@ android/app/captures
 android/app/outputs
 android/.gradle
 android/app/.cxx
+android/build
+android/app/release
+
