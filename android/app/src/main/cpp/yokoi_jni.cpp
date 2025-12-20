@@ -1292,7 +1292,7 @@ static void render_frame(GlResources& r, int panel) {
 
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     auto draw_vertices = [&](GLuint tex, const std::vector<RenderVertex>& verts) {
         if (tex == 0 || verts.empty()) return;
@@ -1408,11 +1408,60 @@ static void render_frame(GlResources& r, int panel) {
 
     // Background layer.
     if (panel_is_game && r.tex_background != 0 && g_game && g_game->background_info && r.tex_background_w > 0 && r.tex_background_h > 0) {
+        const uint16_t* bi = g_game->background_info;
+        // Enabled per-title via background_info, same as 3DS.
+        const bool want_bg_shadow = (bi[(size_t)(2 + g_nb_screen * 4)] == 1);
+
+        // 3DS-style background shadow (optional per-title flag in background_info).
+        // Draw first, slightly offset and dark with low alpha.
+        if (want_bg_shadow) {
+            // Faint shadow like the 3DS renderer.
+            glUniform4f(r.uMul, 0.0f, 0.0f, 0.0f, (float)0x24 / 255.0f);
+            std::vector<RenderVertex> bg_shadow_verts;
+            bg_shadow_verts.reserve(g_nb_screen * 6);
+
+            float texW = (float)r.tex_background_w;
+            float texH = (float)r.tex_background_h;
+
+            for (uint8_t screen = 0; screen < g_nb_screen; screen++) {
+                if (!is_combined) {
+                    if (!g_split_two_screens_to_panels && is_panel1) {
+                        continue;
+                    }
+                    if (g_split_two_screens_to_panels && (int)screen != panel) {
+                        continue;
+                    }
+                }
+
+                uint16_t id = (uint16_t)(2 + screen * 4);
+                float u = (float)bi[id + 0];
+                float v = (float)bi[id + 1];
+                float w = (float)bi[id + 2];
+                float h = (float)bi[id + 3];
+
+                float u0, v0, u1, v1;
+                calc_uv_rect(texW, texH, u, v, w, h, u0, v0, u1, v1);
+
+                uint16_t scale = g_segment_info[2] ? g_segment_info[2] : 1;
+                float dw = (float)g_segment_info[4 + screen * 2] / (float)scale;
+                float dh = (float)g_segment_info[5 + screen * 2] / (float)scale;
+
+                float gx = 0.0f;
+                float gy = 0.0f;
+                get_screen_base_global(screen, gx, gy);
+                float dx = to_local_x(gx) + 6.0f;
+                float dy = to_local_y(gy) + 6.0f;
+
+                append_quad_ndc_uv_canvas(bg_shadow_verts, contentW, contentH, dx, dy, dw, dh, u0, v0, u1, v1);
+            }
+
+            draw_vertices(r.tex_background, bg_shadow_verts);
+        }
+
+        // Main background.
         glUniform4f(r.uMul, 1.0f, 1.0f, 1.0f, 1.0f);
         std::vector<RenderVertex> bg_verts;
         bg_verts.reserve(g_nb_screen * 6);
-
-        const uint16_t* bi = g_game->background_info;
         float texW = (float)r.tex_background_w;
         float texH = (float)r.tex_background_h;
 
@@ -1453,17 +1502,24 @@ static void render_frame(GlResources& r, int panel) {
 
     // Segments layer.
     if (panel_is_game && g_segment_info[0] > 0 && g_segment_info[1] > 0) {
+        const bool is_mask = (g_segment_info[3] & 0x01) != 0;
+
         std::vector<RenderVertex> seg_verts;
         seg_verts.reserve(g_segments.size() * 6);
+
+        // 3DS-style segment marking/shadow passes are only for non-mask segment atlases.
+        std::vector<RenderVertex> seg_mark_verts;
+        std::vector<RenderVertex> seg_shadow_verts;
+        if (!is_mask) {
+            seg_mark_verts.reserve(g_segments.size() * 6);
+            seg_shadow_verts.reserve(g_segments.size() * 6);
+        }
 
         uint16_t scale = g_segment_info[2] ? g_segment_info[2] : 1;
         float texW = (float)g_segment_info[0];
         float texH = (float)g_segment_info[1];
 
         for (const auto& seg : g_segments) {
-            if (!seg.buffer_state) {
-                continue;
-            }
             if (!is_combined) {
                 if (!g_split_two_screens_to_panels && is_panel1) {
                     continue;
@@ -1498,7 +1554,21 @@ static void render_frame(GlResources& r, int panel) {
                 calc_uv_rect(texW, texH, u, v, w, h, u0, v0, u1, v1);
             }
 
-            append_quad_ndc_uv_canvas(seg_verts, contentW, contentH, sx_local, sy_local, sw, sh, u0, v0, u1, v1);
+            if (!is_mask) {
+                // Segment marking effect: draw ALL segments very faintly (even if off).
+                // Matches 3DS: color ~0x101010 with user-controlled alpha.
+                append_quad_ndc_uv_canvas(seg_mark_verts, contentW, contentH, sx_local, sy_local, sw, sh, u0, v0, u1, v1);
+
+                // Shadow: draw only lit segments, slightly offset and darker.
+                if (seg.buffer_state) {
+                    append_quad_ndc_uv_canvas(seg_shadow_verts, contentW, contentH, sx_local + 2.0f, sy_local + 2.0f, sw, sh, u0, v0, u1, v1);
+                }
+            }
+
+            // Main lit segments.
+            if (seg.buffer_state) {
+                append_quad_ndc_uv_canvas(seg_verts, contentW, contentH, sx_local, sy_local, sw, sh, u0, v0, u1, v1);
+            }
         }
 
         float seg_r = br * 0.12f;
@@ -1506,6 +1576,25 @@ static void render_frame(GlResources& r, int panel) {
         float seg_b = bb * 0.12f;
 
         GLuint seg_tex = (r.tex_segments != 0) ? r.tex_segments : r.tex_white;
+
+        if (!is_mask) {
+            // Pass 1: faint marking across all segments.
+            float mark_a = (float)g_settings.segment_marking_alpha / 255.0f;
+            if (mark_a > 0.0f && !seg_mark_verts.empty()) {
+                float m = 16.0f / 255.0f;
+                glUniform4f(r.uMul, m, m, m, mark_a);
+                draw_vertices(seg_tex, seg_mark_verts);
+            }
+
+            // Pass 2: shadow under lit segments.
+            if (!seg_shadow_verts.empty()) {
+                float s = 17.0f / 255.0f;
+                glUniform4f(r.uMul, s, s, s, (float)0x18 / 255.0f);
+                draw_vertices(seg_tex, seg_shadow_verts);
+            }
+        }
+
+        // Pass 3: main lit segments.
         glUniform4f(r.uMul, seg_r, seg_g, seg_b, 1.0f);
         draw_vertices(seg_tex, seg_verts);
     }
