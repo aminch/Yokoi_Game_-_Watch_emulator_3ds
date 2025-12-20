@@ -51,6 +51,8 @@ public final class MainActivity extends Activity {
     private static native void nativeSetStorageRoot(String path);
     private static native void nativeInit();
     private static native void nativeShutdown();
+    private static native void nativeStartAaudio();
+    private static native void nativeStopAaudio();
     private static native String[] nativeGetTextureAssetNames();
     private static native void nativeSetTextures(
             int segmentTex, int segmentW, int segmentH,
@@ -919,6 +921,12 @@ public final class MainActivity extends Activity {
     }
 
     private void stopAudio() {
+        // Preferred audio backend: native AAudio.
+        try {
+            nativeStopAaudio();
+        } catch (Throwable ignored) {
+        }
+
         audioRunning = false;
         if (audioThread != null) {
             try {
@@ -940,6 +948,14 @@ public final class MainActivity extends Activity {
     }
 
     private void startAudioIfNeeded() {
+        // Preferred audio backend: native AAudio.
+        try {
+            nativeStartAaudio();
+            return;
+        } catch (Throwable ignored) {
+            // Fall back to the legacy AudioTrack path below.
+        }
+
         if (audioTrack != null || audioThread != null) {
             return;
         }
@@ -1096,6 +1112,9 @@ public final class MainActivity extends Activity {
         } else {
             tryStartSecondDisplay();
         }
+
+        // `onSurfaceCreated()` may not run again when resuming.
+        startAudioIfNeeded();
     }
 
     @Override
