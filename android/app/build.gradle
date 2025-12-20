@@ -6,6 +6,11 @@ android {
     namespace 'com.retrovalou.yokoi'
     compileSdk 34
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
     defaultConfig {
         applicationId 'com.retrovalou.yokoi'
         minSdk 26
@@ -47,4 +52,5 @@ android {
 }
 
 dependencies {
+    implementation 'com.google.android.material:material:1.12.0'
 }

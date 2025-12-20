@@ -22,6 +22,16 @@ import android.view.Display;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Spinner;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -64,6 +74,11 @@ public final class MainActivity extends Activity {
     private static native int nativeAudioRead(short[] pcm, int frames);
     private static native boolean nativeConsumeTextureReloadRequest();
 
+    private static native int nativeGetBackgroundColor();
+    private static native void nativeSetBackgroundColor(int rgb);
+    private static native int nativeGetSegmentMarkingAlpha();
+    private static native void nativeSetSegmentMarkingAlpha(int alpha);
+
     private int lastSegTexId;
     private int lastBgTexId;
     private int lastCsTexId;
@@ -94,6 +109,192 @@ public final class MainActivity extends Activity {
 
     private int controllerMask;
     private long lastDpadKeyEventUptimeMs;
+
+    private android.app.Dialog settingsDialog;
+
+    private static final String[] BG_PRESET_NAMES = new String[]{
+            "Light Yellow",
+            "Light Blue",
+            "Greyish",
+            "White",
+            "Light Green",
+            "Cream",
+    };
+
+    // Colors are 0xRRGGBB to match native settings.
+    private static final int[] BG_PRESET_COLORS = new int[]{
+            0xdbe2bb,
+            0xE0F0FF,
+            0x98A09C,
+            0xFFFFFF,
+            0xE0FFE0,
+            0xFFF8DC,
+    };
+
+        private static final String[] SEG_PRESET_NAMES = new String[]{
+            "None",
+            "Light",
+            "Dark",
+        };
+
+        private static final int[] SEG_PRESET_ALPHA = new int[]{
+            0,
+            5,
+            10,
+        };
+
+    private static int clampInt(int v, int lo, int hi) {
+        if (v < lo) return lo;
+        if (v > hi) return hi;
+        return v;
+    }
+
+    private int findClosestBgPresetIndex(int rgb) {
+        rgb &= 0x00FFFFFF;
+        for (int i = 0; i < BG_PRESET_COLORS.length; i++) {
+            if ((BG_PRESET_COLORS[i] & 0x00FFFFFF) == rgb) {
+                return i;
+            }
+        }
+        // If not an exact match, default to first preset.
+        return 0;
+    }
+
+    private int findClosestSegPresetIndex(int alpha) {
+        alpha = clampInt(alpha, 0, 255);
+        for (int i = 0; i < SEG_PRESET_ALPHA.length; i++) {
+            if (SEG_PRESET_ALPHA[i] == alpha) {
+                return i;
+            }
+        }
+        // Default to Light (matches old default 0x05).
+        return 1;
+    }
+
+    private void showSettingsMenu() {
+        if (settingsDialog != null && settingsDialog.isShowing()) {
+            return;
+        }
+
+        final int mode = nativeGetAppMode();
+        final boolean inGame = (mode == MODE_GAME);
+
+        final int initialAlpha = clampInt(nativeGetSegmentMarkingAlpha(), 0, 255);
+        final int initialBg = nativeGetBackgroundColor() & 0x00FFFFFF;
+
+        final int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(pad, pad, pad, pad);
+        root.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView segLabel = new TextView(this);
+        segLabel.setText("Segments");
+        root.addView(segLabel);
+
+        Spinner segSpinner = new Spinner(this);
+        ArrayAdapter<String> segAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, SEG_PRESET_NAMES);
+        segAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        segSpinner.setAdapter(segAdapter);
+        segSpinner.setSelection(findClosestSegPresetIndex(initialAlpha));
+        root.addView(segSpinner);
+
+        final boolean[] ignoreFirstSeg = new boolean[]{true};
+        segSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (ignoreFirstSeg[0]) {
+                    ignoreFirstSeg[0] = false;
+                    return;
+                }
+                int idx = clampInt(position, 0, SEG_PRESET_ALPHA.length - 1);
+                nativeSetSegmentMarkingAlpha(SEG_PRESET_ALPHA[idx]);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+
+        TextView bgLabel = new TextView(this);
+        bgLabel.setText("Background color");
+        LinearLayout.LayoutParams bgLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        bgLp.topMargin = pad / 2;
+        bgLabel.setLayoutParams(bgLp);
+        root.addView(bgLabel);
+
+        Spinner bgSpinner = new Spinner(this);
+        ArrayAdapter<String> bgAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, BG_PRESET_NAMES);
+        bgAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        bgSpinner.setAdapter(bgAdapter);
+        bgSpinner.setSelection(findClosestBgPresetIndex(initialBg));
+        root.addView(bgSpinner);
+
+        final boolean[] ignoreFirstBg = new boolean[]{true};
+        bgSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (ignoreFirstBg[0]) {
+                    ignoreFirstBg[0] = false;
+                    return;
+                }
+                int idx = clampInt(position, 0, BG_PRESET_COLORS.length - 1);
+                nativeSetBackgroundColor(BG_PRESET_COLORS[idx]);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+
+        // Actions (stacked vertically, similar width to dropdowns).
+        // Only show Quit Game while in a game.
+        if (inGame) {
+            LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            btnLp.topMargin = pad;
+
+            Button quitBtn = new Button(this);
+            quitBtn.setLayoutParams(btnLp);
+            quitBtn.setText("Quit Game");
+            quitBtn.setOnClickListener(v -> {
+                if (settingsDialog != null) {
+                    settingsDialog.dismiss();
+                }
+                nativeReturnToMenu();
+            });
+            root.addView(quitBtn);
+        }
+
+        LinearLayout.LayoutParams btnLp2 = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnLp2.topMargin = inGame ? (pad / 2) : pad;
+
+        Button closeBtn = new Button(this);
+        closeBtn.setLayoutParams(btnLp2);
+        closeBtn.setText("Close");
+        closeBtn.setOnClickListener(v -> {
+            if (settingsDialog != null) {
+                settingsDialog.dismiss();
+            }
+        });
+        root.addView(closeBtn);
+
+        MaterialAlertDialogBuilder b = new MaterialAlertDialogBuilder(this);
+        b.setTitle("Settings");
+        b.setView(root);
+        b.setCancelable(true);
+
+        settingsDialog = b.create();
+        settingsDialog.setOnDismissListener(dlg -> settingsDialog = null);
+        settingsDialog.show();
+    }
 
     private static float getCenteredAxis(MotionEvent event, InputDevice device, int axis) {
         if (device == null) {
@@ -888,13 +1089,10 @@ public final class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        int mode = nativeGetAppMode();
-        if (mode == MODE_GAME) {
-            nativeReturnToMenu();
+        if (settingsDialog != null && settingsDialog.isShowing()) {
+            settingsDialog.dismiss();
             return;
         }
-        // Ensure the second display is closed immediately when exiting via Back.
-        stopSecondDisplay();
-        super.onBackPressed();
+        showSettingsMenu();
     }
 }
