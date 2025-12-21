@@ -89,6 +89,7 @@ struct GlResources {
     GLint uMul = -1;
     GLint uAlphaOnly = -1;
     GLint uScale = -1;
+    GLint uOffset = -1;
     GLuint tex_white = 0;
 
     GLuint tex_segments = 0;
@@ -488,6 +489,7 @@ static void init_gl_resources(GlResources& r) {
     r.uMul = -1;
     r.uAlphaOnly = -1;
     r.uScale = -1;
+    r.uOffset = -1;
     r.tex_white = 0;
 
     r.tex_segments = 0;
@@ -503,9 +505,10 @@ static void init_gl_resources(GlResources& r) {
         "layout(location=1) in vec2 aUv;\n"
         "out vec2 vUv;\n"
         "uniform vec2 uScale;\n"
+        "uniform vec2 uOffset;\n"
         "void main() {\n"
         "  vUv = aUv;\n"
-        "  gl_Position = vec4(aPos.xy * uScale, 0.0, 1.0);\n"
+        "  gl_Position = vec4(aPos.xy * uScale + uOffset, 0.0, 1.0);\n"
         "}\n";
 
     const char* fs_src =
@@ -542,6 +545,7 @@ static void init_gl_resources(GlResources& r) {
     r.uMul = glGetUniformLocation(r.program, "uMul");
     r.uAlphaOnly = glGetUniformLocation(r.program, "uAlphaOnly");
     r.uScale = glGetUniformLocation(r.program, "uScale");
+    r.uOffset = glGetUniformLocation(r.program, "uOffset");
 
     glGenVertexArrays(1, &r.vao);
     glGenBuffers(1, &r.vbo);
@@ -1768,6 +1772,17 @@ static void render_frame(GlResources& r, int panel) {
         sy = viewAspect / contentAspect;
     }
     glUniform2f(r.uScale, sx, sy);
+
+    // In portrait, top-align vertically letterboxed content so the unused space is at the bottom.
+    // This helps keep the bottom area clearer for touch controls.
+    if (r.uOffset >= 0) {
+        float ox = 0.0f;
+        float oy = 0.0f;
+        if (r.height > r.width && sy < 1.0f) {
+            oy = 1.0f - sy;
+        }
+        glUniform2f(r.uOffset, ox, oy);
+    }
 
     auto to_local_x = [&](float gx) { return gx - panel_x; };
     auto to_local_y = [&](float gy) { return gy - panel_y; };

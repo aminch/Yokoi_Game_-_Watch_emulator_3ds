@@ -3,12 +3,17 @@ package com.retrovalou.yokoi;
 import android.app.Activity;
 import android.app.Presentation;
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.content.res.AssetManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
+import android.graphics.drawable.GradientDrawable;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -24,10 +29,12 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Spinner;
 
@@ -101,6 +108,9 @@ public final class MainActivity extends Activity {
     private static final int MODE_MENU_LOAD_PROMPT = 1;
     private static final int MODE_GAME = 2;
 
+    private static final String PREFS_NAME = "yokoi_prefs";
+    private static final String PREF_SHOW_OVERLAY_CONTROLS = "show_overlay_controls";
+
     // Controller bitmask must match native ControllerBits in yokoi_jni.cpp
     private static final int CTL_DPAD_UP = 1 << 0;
     private static final int CTL_DPAD_DOWN = 1 << 1;
@@ -115,7 +125,12 @@ public final class MainActivity extends Activity {
     private static final int CTL_L1 = 1 << 10;
 
     private int controllerMask;
+    private int overlayMask;
     private long lastDpadKeyEventUptimeMs;
+
+    private FrameLayout rootView;
+    private FrameLayout overlayControls;
+    private volatile boolean overlayControlsEnabled;
 
     private android.app.Dialog settingsDialog;
 
@@ -263,6 +278,20 @@ public final class MainActivity extends Activity {
             }
         });
 
+            TextView overlayLabel = new TextView(this);
+            overlayLabel.setText("On-screen controls");
+            LinearLayout.LayoutParams overlayLabelLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+            overlayLabelLp.topMargin = pad / 2;
+            overlayLabel.setLayoutParams(overlayLabelLp);
+            root.addView(overlayLabel);
+
+            Switch overlaySwitch = new Switch(this);
+            overlaySwitch.setChecked(overlayControlsEnabled);
+            overlaySwitch.setOnCheckedChangeListener((buttonView, isChecked) -> setOverlayControlsEnabled(isChecked));
+            root.addView(overlaySwitch);
+
         // Actions (stacked vertically, similar width to dropdowns).
         // Only show Quit Game while in a game.
         if (inGame) {
@@ -357,7 +386,324 @@ public final class MainActivity extends Activity {
         int newMask = down ? (controllerMask | bit) : (controllerMask & ~bit);
         if (newMask != controllerMask) {
             controllerMask = newMask;
-            nativeSetControllerMask(controllerMask);
+            pushControllerMask();
+        }
+    }
+
+    private void pushControllerMask() {
+        nativeSetControllerMask(controllerMask | overlayMask);
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private void setOverlayBit(int bit, boolean down) {
+        int newMask = down ? (overlayMask | bit) : (overlayMask & ~bit);
+        if (newMask != overlayMask) {
+            overlayMask = newMask;
+            pushControllerMask();
+        }
+    }
+
+    private GradientDrawable makeOverlayShape(boolean oval, float cornerRadiusPx) {
+        GradientDrawable d = new GradientDrawable();
+        d.setShape(oval ? GradientDrawable.OVAL : GradientDrawable.RECTANGLE);
+        // For rectangle shapes, cornerRadius controls rounding (use height/2 for capsule buttons).
+        if (!oval) {
+            d.setCornerRadius(cornerRadiusPx);
+        }
+        d.setColor(Color.argb(110, 20, 20, 20));
+        d.setStroke(dp(1), Color.argb(120, 255, 255, 255));
+        return d;
+    }
+
+    private Button makeOverlayButton(String label, int bit, int widthPx, int heightPx, boolean circle, boolean pill) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+
+        b.setTextColor(Color.argb(220, 255, 255, 255));
+        b.setTextSize(13);
+        b.setPadding(0, 0, 0, 0);
+        b.setMinWidth(0);
+        b.setMinHeight(0);
+
+        // Make it look like a translucent overlay button (no default background).
+        // - circle: full oval
+        // - pill: capsule (flat top/bottom, rounded ends) => rounded-rect with radius=height/2
+        final boolean oval = circle;
+        final float corner = pill ? (heightPx * 0.5f) : dp(10);
+        b.setBackground(makeOverlayShape(oval, corner));
+        b.setAlpha(0.65f);
+        b.setOnTouchListener((v, event) -> {
+            int a = event.getActionMasked();
+            if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_POINTER_DOWN) {
+                setOverlayBit(bit, true);
+                v.setPressed(true);
+                v.setAlpha(0.9f);
+                return true;
+            }
+            if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_POINTER_UP || a == MotionEvent.ACTION_CANCEL) {
+                setOverlayBit(bit, false);
+                v.setPressed(false);
+                v.setAlpha(0.65f);
+                return true;
+            }
+            return true;
+        });
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(widthPx, heightPx);
+        lp.leftMargin = dp(4);
+        lp.rightMargin = dp(4);
+        lp.topMargin = dp(4);
+        lp.bottomMargin = dp(4);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    private final class DpadView extends View {
+        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint pressedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private int activeBit = 0;
+
+        DpadView(Context ctx) {
+            super(ctx);
+            setAlpha(0.75f);
+            setClickable(true);
+
+            fillPaint.setStyle(Paint.Style.FILL);
+            fillPaint.setColor(Color.argb(110, 20, 20, 20));
+
+            pressedPaint.setStyle(Paint.Style.FILL);
+            pressedPaint.setColor(Color.argb(160, 255, 255, 255));
+
+            strokePaint.setStyle(Paint.Style.STROKE);
+            strokePaint.setStrokeWidth(dp(1));
+            strokePaint.setColor(Color.argb(120, 255, 255, 255));
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w = getWidth();
+            float h = getHeight();
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+
+            float arm = Math.min(w, h) * 0.33f;
+            float thick = Math.min(w, h) * 0.26f;
+            float r = thick * 0.35f;
+
+
+            // Arms + center rects.
+            RectF center = new RectF(cx - thick * 0.5f, cy - thick * 0.5f, cx + thick * 0.5f, cy + thick * 0.5f);
+            RectF up = new RectF(cx - thick * 0.5f, cy - arm - thick * 0.5f, cx + thick * 0.5f, cy - thick * 0.5f);
+            RectF down = new RectF(cx - thick * 0.5f, cy + thick * 0.5f, cx + thick * 0.5f, cy + arm + thick * 0.5f);
+            RectF left = new RectF(cx - arm - thick * 0.5f, cy - thick * 0.5f, cx - thick * 0.5f, cy + thick * 0.5f);
+            RectF right = new RectF(cx + thick * 0.5f, cy - thick * 0.5f, cx + arm + thick * 0.5f, cy + thick * 0.5f);
+
+            // Draw as one D-pad: fill overlapping stems (no internal seams).
+            RectF vert = new RectF(cx - thick * 0.5f, cy - arm - thick * 0.5f, cx + thick * 0.5f, cy + arm + thick * 0.5f);
+            RectF hori = new RectF(cx - arm - thick * 0.5f, cy - thick * 0.5f, cx + arm + thick * 0.5f, cy + thick * 0.5f);
+            canvas.drawRoundRect(vert, r, r, fillPaint);
+            canvas.drawRoundRect(hori, r, r, fillPaint);
+            canvas.drawRoundRect(center, r, r, fillPaint);
+
+            // Pressed highlight (only the active arm).
+            if (activeBit == CTL_DPAD_UP) canvas.drawRoundRect(up, r, r, pressedPaint);
+            if (activeBit == CTL_DPAD_DOWN) canvas.drawRoundRect(down, r, r, pressedPaint);
+            if (activeBit == CTL_DPAD_LEFT) canvas.drawRoundRect(left, r, r, pressedPaint);
+            if (activeBit == CTL_DPAD_RIGHT) canvas.drawRoundRect(right, r, r, pressedPaint);
+
+            // Single outline path around the union.
+            Path pv = new Path();
+            Path ph = new Path();
+            pv.addRoundRect(vert, r, r, Path.Direction.CW);
+            ph.addRoundRect(hori, r, r, Path.Direction.CW);
+            pv.op(ph, Path.Op.UNION);
+            canvas.drawPath(pv, strokePaint);
+        }
+
+        private int pickBit(float x, float y) {
+            float w = getWidth();
+            float h = getHeight();
+            float cx = w * 0.5f;
+            float cy = h * 0.5f;
+            float dx = x - cx;
+            float dy = y - cy;
+            float dead = Math.min(w, h) * 0.12f;
+            if (Math.abs(dx) < dead && Math.abs(dy) < dead) {
+                return 0;
+            }
+            if (Math.abs(dx) > Math.abs(dy)) {
+                return (dx < 0) ? CTL_DPAD_LEFT : CTL_DPAD_RIGHT;
+            }
+            return (dy < 0) ? CTL_DPAD_UP : CTL_DPAD_DOWN;
+        }
+
+        private void setActiveBit(int bit) {
+            if (bit == activeBit) {
+                return;
+            }
+            // Clear previous.
+            if (activeBit != 0) {
+                setOverlayBit(activeBit, false);
+            }
+            activeBit = bit;
+            if (activeBit != 0) {
+                setOverlayBit(activeBit, true);
+            }
+            invalidate();
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            int a = event.getActionMasked();
+            if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_MOVE) {
+                setActiveBit(pickBit(event.getX(), event.getY()));
+                return true;
+            }
+            if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) {
+                setActiveBit(0);
+                return true;
+            }
+            return super.onTouchEvent(event);
+        }
+    }
+
+    private void ensureOverlayControlsCreated() {
+        if (overlayControls != null) {
+            return;
+        }
+
+        overlayControls = new FrameLayout(this);
+        overlayControls.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        overlayControls.setClickable(false);
+        overlayControls.setFocusable(false);
+        overlayControls.setVisibility(View.GONE);
+
+        final int btn = dp(58);
+        final int margin = dp(16);
+        final boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        final int portraitBottomClearance = margin + dp(44) + dp(12);
+
+        // D-pad (bottom-left) - explicitly sized so FrameLayout gravity works correctly.
+        DpadView dpad = new DpadView(this);
+        int dpadSize = dp(170);
+
+        FrameLayout.LayoutParams dpadLp = new FrameLayout.LayoutParams(dpadSize, dpadSize);
+        dpadLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.START;
+        dpadLp.leftMargin = margin;
+        dpadLp.bottomMargin = landscape ? margin : portraitBottomClearance;
+        overlayControls.addView(dpad, dpadLp);
+
+        // ABXY (bottom-right)
+        LinearLayout abxy = new LinearLayout(this);
+        abxy.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout abxyRowUp = new LinearLayout(this);
+        abxyRowUp.setOrientation(LinearLayout.HORIZONTAL);
+        abxyRowUp.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        View abxySpacerL = new View(this);
+        abxySpacerL.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
+        abxyRowUp.addView(abxySpacerL);
+        abxyRowUp.addView(makeOverlayButton("X", CTL_X, btn, btn, true, false));
+        View abxySpacerR = new View(this);
+        abxySpacerR.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
+        abxyRowUp.addView(abxySpacerR);
+
+        LinearLayout abxyRowMid = new LinearLayout(this);
+        abxyRowMid.setOrientation(LinearLayout.HORIZONTAL);
+        abxyRowMid.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        abxyRowMid.addView(makeOverlayButton("Y", CTL_Y, btn, btn, true, false));
+        View abxySpacer = new View(this);
+        abxySpacer.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
+        abxyRowMid.addView(abxySpacer);
+        abxyRowMid.addView(makeOverlayButton("A", CTL_A, btn, btn, true, false));
+
+        LinearLayout abxyRowDown = new LinearLayout(this);
+        abxyRowDown.setOrientation(LinearLayout.HORIZONTAL);
+        abxyRowDown.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        View abxySpacerDL = new View(this);
+        abxySpacerDL.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
+        abxyRowDown.addView(abxySpacerDL);
+        abxyRowDown.addView(makeOverlayButton("B", CTL_B, btn, btn, true, false));
+        View abxySpacerDR = new View(this);
+        abxySpacerDR.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
+        abxyRowDown.addView(abxySpacerDR);
+
+        abxy.addView(abxyRowUp);
+        abxy.addView(abxyRowMid);
+        abxy.addView(abxyRowDown);
+
+        FrameLayout.LayoutParams abxyLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        abxyLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.END;
+        abxyLp.rightMargin = margin;
+        abxyLp.bottomMargin = landscape ? margin : portraitBottomClearance;
+        overlayControls.addView(abxy, abxyLp);
+
+        // Start/Select (oval buttons). In landscape: Select top-left, Start top-right.
+        int ssW = dp(112);
+        int ssH = dp(44);
+        Button select = makeOverlayButton("Select", CTL_SELECT, ssW, ssH, false, true);
+        Button start = makeOverlayButton("Start", CTL_START, ssW, ssH, false, true);
+
+        FrameLayout.LayoutParams selectLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams startLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT);
+
+        if (landscape) {
+            selectLp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
+            selectLp.leftMargin = margin;
+            selectLp.topMargin = margin;
+
+            startLp.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+            startLp.rightMargin = margin;
+            startLp.topMargin = margin;
+        } else {
+            // Portrait: keep them near bottom center.
+            selectLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
+            selectLp.bottomMargin = margin;
+            selectLp.rightMargin = dp(60);
+
+            startLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
+            startLp.bottomMargin = margin;
+            startLp.leftMargin = dp(60);
+        }
+
+        overlayControls.addView(select, selectLp);
+        overlayControls.addView(start, startLp);
+    }
+
+    private void setOverlayControlsEnabled(boolean enabled) {
+        overlayControlsEnabled = enabled;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putBoolean(PREF_SHOW_OVERLAY_CONTROLS, enabled)
+                .apply();
+        runOnUiThread(() -> {
+            if (rootView == null) {
+                return;
+            }
+            ensureOverlayControlsCreated();
+            if (overlayControls.getParent() == null) {
+                rootView.addView(overlayControls);
+            }
+            overlayControls.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        });
+
+        if (!enabled) {
+            overlayMask = 0;
+            pushControllerMask();
         }
     }
 
@@ -658,6 +1004,9 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        overlayControlsEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getBoolean(PREF_SHOW_OVERLAY_CONTROLS, false);
+
         nativeSetAssetManager(getAssets());
         nativeSetStorageRoot(getFilesDir().getAbsolutePath());
 
@@ -803,7 +1152,16 @@ public final class MainActivity extends Activity {
             return true;
         });
 
-        setContentView(glView);
+        rootView = new FrameLayout(this);
+        rootView.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        rootView.addView(glView);
+        // Overlay controls are created lazily, and hidden by default.
+        setContentView(rootView);
+
+        // Apply persisted overlay state.
+        setOverlayControlsEnabled(overlayControlsEnabled);
     }
 
     @Override
@@ -894,7 +1252,7 @@ public final class MainActivity extends Activity {
 
             if (newMask != controllerMask) {
                 controllerMask = newMask;
-                nativeSetControllerMask(controllerMask);
+                pushControllerMask();
             }
             return true;
         }
@@ -1150,7 +1508,8 @@ public final class MainActivity extends Activity {
         }
         // Avoid stuck controller bits if a device disconnects or stops sending events.
         controllerMask = 0;
-        nativeSetControllerMask(0);
+        overlayMask = 0;
+        pushControllerMask();
         stopAudio();
     }
 
