@@ -29,13 +29,35 @@ file(GLOB_RECURSE YOKOI_GW_ROM_SRC
 list(FILTER YOKOI_STD_SRC EXCLUDE REGEX ".*\\/sound_example\\/.*")
 
 add_library(yokoi SHARED
-    yokoi_jni.cpp
+    core/yokoi_app_flow.cpp
+    core/yokoi_audio.cpp
+    core/yokoi_cpu_utils.cpp
+    core/yokoi_emulation_thread.cpp
+    core/yokoi_game_loader.cpp
+    core/yokoi_layout.cpp
+    core/yokoi_menu_selection.cpp
+    core/yokoi_runtime_state.cpp
+    core/yokoi_segments_state.cpp
+
+    input/yokoi_controller_state.cpp
+    input/yokoi_input_mapping.cpp
+
+    render/yokoi_gl.cpp
+
+    jni/yokoi_controller_jni.cpp
+    jni/yokoi_jni.cpp
+    jni/yokoi_jni_aliases.cpp
+    jni/yokoi_settings_jni.cpp
     ${YOKOI_SM5XX_SRC}
     ${YOKOI_STD_SRC}
     ${YOKOI_GW_ROM_SRC}
 )
 
 target_include_directories(yokoi PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/core"
+    "${CMAKE_CURRENT_LIST_DIR}/input"
+    "${CMAKE_CURRENT_LIST_DIR}/render"
+    "${CMAKE_CURRENT_LIST_DIR}/jni"
     "${YOKOI_ROOT}/source"
     "${YOKOI_ROOT}/source/std"
     "${YOKOI_ROOT}/source/std/GW_ROM_RGDS"

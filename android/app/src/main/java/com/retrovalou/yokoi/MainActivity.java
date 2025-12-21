@@ -1,1016 +1,66 @@
 package com.retrovalou.yokoi;
 
 import android.app.Activity;
-import android.app.Presentation;
 import android.content.Context;
-import android.content.SharedPreferences;
-import android.content.res.Configuration;
-import android.content.res.AssetManager;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.RectF;
-import android.graphics.drawable.GradientDrawable;
-import android.media.AudioAttributes;
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioTrack;
 import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
-import android.opengl.GLUtils;
 import android.os.Bundle;
-import android.hardware.display.DisplayManager;
-import android.view.Display;
-import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.Switch;
-import android.widget.TextView;
-import android.widget.Spinner;
+import com.retrovalou.yokoi.audio.AudioDriver;
+import com.retrovalou.yokoi.display.SecondScreenController;
+import com.retrovalou.yokoi.gl.MenuUiTextureBuilder;
+import com.retrovalou.yokoi.gl.TextureInfo;
+import com.retrovalou.yokoi.gl.TextureLoader;
+import com.retrovalou.yokoi.input.ControllerInputRouter;
+import com.retrovalou.yokoi.input.overlay.OverlayControls;
+import com.retrovalou.yokoi.nativebridge.YokoiNative;
 
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-
-import java.io.IOException;
-import java.io.InputStream;
+import com.retrovalou.yokoi.ui.SettingsMenu;
 
 
 public final class MainActivity extends Activity {
-    static {
-        System.loadLibrary("yokoi");
-    }
-
     private GLSurfaceView glView;
-    private AudioTrack audioTrack;
-    private Thread audioThread;
-    private volatile boolean audioRunning;
+    private final AudioDriver audioDriver = new AudioDriver();
 
-    private static native void nativeSetAssetManager(AssetManager assetManager);
-    private static native void nativeSetStorageRoot(String path);
-    private static native void nativeInit();
-    private static native void nativeShutdown();
-    private static native void nativeStartAaudio();
-    private static native void nativeStopAaudio();
-    private static native String[] nativeGetTextureAssetNames();
-    private static native void nativeSetTextures(
-            int segmentTex, int segmentW, int segmentH,
-            int backgroundTex, int backgroundW, int backgroundH,
-            int consoleTex, int consoleW, int consoleH);
-        private static native void nativeSetUiTexture(int uiTex, int uiW, int uiH);
-        private static native int nativeGetAppMode();
-        private static native int nativeGetMenuLoadChoice();
-        private static native boolean nativeMenuHasSaveState();
-        private static native String[] nativeGetSelectedGameInfo();
-        private static native void nativeAutoSaveState();
-        private static native void nativeReturnToMenu();
-        private static native void nativeSetPaused(boolean paused);
-    private static native void nativeResize(int width, int height);
-    private static native void nativeRender();
-    private static native void nativeRenderPanel(int panel);
-    private static native void nativeTouch(float x, float y, int action);
-    private static native void nativeSetTouchSurfaceSize(int width, int height);
-    private static native void nativeSetEmulationDriverPanel(int panel);
-    private static native void nativeSetControllerMask(int mask);
-    private static native int nativeGetTextureGeneration();
-    private static native int nativeGetAudioSampleRate();
-    private static native int nativeAudioRead(short[] pcm, int frames);
-    private static native boolean nativeConsumeTextureReloadRequest();
-
-    private static native int nativeGetBackgroundColor();
-    private static native void nativeSetBackgroundColor(int rgb);
-    private static native int nativeGetSegmentMarkingAlpha();
-    private static native void nativeSetSegmentMarkingAlpha(int alpha);
+    private final SettingsMenu settingsMenu = new SettingsMenu(this);
 
     private int lastSegTexId;
     private int lastBgTexId;
     private int lastCsTexId;
     private int lastUiTexId;
 
-    private DisplayManager displayManager;
-    private SecondScreenPresentation secondPresentation;
-    private GLSurfaceView secondGlView;
-    private volatile boolean dualDisplayEnabled;
+    private SecondScreenController secondScreenController;
 
     // Single-display convenience: render the top panel only while in-game.
     private volatile boolean singleScreenTopOnly;
 
-    // Must match native AppMode enum in yokoi_jni.cpp
-    private static final int MODE_MENU_SELECT = 0;
-    private static final int MODE_MENU_LOAD_PROMPT = 1;
-    private static final int MODE_GAME = 2;
-
-    private static final String PREFS_NAME = "yokoi_prefs";
-    private static final String PREF_SHOW_OVERLAY_CONTROLS = "show_overlay_controls";
-
-    // Controller bitmask must match native ControllerBits in yokoi_jni.cpp
-    private static final int CTL_DPAD_UP = 1 << 0;
-    private static final int CTL_DPAD_DOWN = 1 << 1;
-    private static final int CTL_DPAD_LEFT = 1 << 2;
-    private static final int CTL_DPAD_RIGHT = 1 << 3;
-    private static final int CTL_A = 1 << 4;
-    private static final int CTL_B = 1 << 5;
-    private static final int CTL_X = 1 << 6;
-    private static final int CTL_Y = 1 << 7;
-    private static final int CTL_START = 1 << 8;
-    private static final int CTL_SELECT = 1 << 9;
-    private static final int CTL_L1 = 1 << 10;
-
-    private int controllerMask;
-    private int overlayMask;
-    private long lastDpadKeyEventUptimeMs;
-
     private FrameLayout rootView;
-    private FrameLayout overlayControls;
-    private volatile boolean overlayControlsEnabled;
-
-    private android.app.Dialog settingsDialog;
-
-    private static final String[] BG_PRESET_NAMES = new String[]{
-            "Light Yellow",
-            "Light Blue",
-            "Greyish",
-            "White",
-            "Light Green",
-            "Cream",
-    };
-
-    // Colors are 0xRRGGBB to match native settings.
-    private static final int[] BG_PRESET_COLORS = new int[]{
-            0xdbe2bb,
-            0xE0F0FF,
-            0x98A09C,
-            0xFFFFFF,
-            0xE0FFE0,
-            0xFFF8DC,
-    };
-
-        private static final String[] SEG_PRESET_NAMES = new String[]{
-            "None",
-            "Light",
-            "Dark",
-        };
-
-        private static final int[] SEG_PRESET_ALPHA = new int[]{
-            0,
-            5,
-            10,
-        };
-
-    private static int clampInt(int v, int lo, int hi) {
-        if (v < lo) return lo;
-        if (v > hi) return hi;
-        return v;
-    }
-
-    private int findClosestBgPresetIndex(int rgb) {
-        rgb &= 0x00FFFFFF;
-        for (int i = 0; i < BG_PRESET_COLORS.length; i++) {
-            if ((BG_PRESET_COLORS[i] & 0x00FFFFFF) == rgb) {
-                return i;
-            }
-        }
-        // If not an exact match, default to first preset.
-        return 0;
-    }
-
-    private int findClosestSegPresetIndex(int alpha) {
-        alpha = clampInt(alpha, 0, 255);
-        for (int i = 0; i < SEG_PRESET_ALPHA.length; i++) {
-            if (SEG_PRESET_ALPHA[i] == alpha) {
-                return i;
-            }
-        }
-        // Default to Light (matches old default 0x05).
-        return 1;
-    }
-
+    private ControllerInputRouter controllerRouter;
+    private OverlayControls overlayControls;
     private void showSettingsMenu() {
-        if (settingsDialog != null && settingsDialog.isShowing()) {
-            return;
-        }
-
-        final int mode = nativeGetAppMode();
-        final boolean inGame = (mode == MODE_GAME);
-        final boolean hasExternalDisplay = hasExternalDisplayConnected();
-
-        if (inGame) {
-            nativeSetPaused(true);
-        }
-
-        final int initialAlpha = clampInt(nativeGetSegmentMarkingAlpha(), 0, 255);
-        final int initialBg = nativeGetBackgroundColor() & 0x00FFFFFF;
-
-        final int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(pad, pad, pad, pad);
-        root.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        TextView segLabel = new TextView(this);
-        segLabel.setText("Segments");
-        root.addView(segLabel);
-
-        Spinner segSpinner = new Spinner(this);
-        ArrayAdapter<String> segAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, SEG_PRESET_NAMES);
-        segAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        segSpinner.setAdapter(segAdapter);
-        segSpinner.setSelection(findClosestSegPresetIndex(initialAlpha));
-        root.addView(segSpinner);
-
-        final boolean[] ignoreFirstSeg = new boolean[]{true};
-        segSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (ignoreFirstSeg[0]) {
-                    ignoreFirstSeg[0] = false;
-                    return;
-                }
-                int idx = clampInt(position, 0, SEG_PRESET_ALPHA.length - 1);
-                nativeSetSegmentMarkingAlpha(SEG_PRESET_ALPHA[idx]);
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-            }
-        });
-
-        TextView bgLabel = new TextView(this);
-        bgLabel.setText("Background color");
-        LinearLayout.LayoutParams bgLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        bgLp.topMargin = pad / 2;
-        bgLabel.setLayoutParams(bgLp);
-        root.addView(bgLabel);
-
-        Spinner bgSpinner = new Spinner(this);
-        ArrayAdapter<String> bgAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, BG_PRESET_NAMES);
-        bgAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        bgSpinner.setAdapter(bgAdapter);
-        bgSpinner.setSelection(findClosestBgPresetIndex(initialBg));
-        root.addView(bgSpinner);
-
-        final boolean[] ignoreFirstBg = new boolean[]{true};
-        bgSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (ignoreFirstBg[0]) {
-                    ignoreFirstBg[0] = false;
-                    return;
-                }
-                int idx = clampInt(position, 0, BG_PRESET_COLORS.length - 1);
-                nativeSetBackgroundColor(BG_PRESET_COLORS[idx]);
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-            }
-        });
-
-            TextView overlayLabel = new TextView(this);
-            overlayLabel.setText("On-screen controls");
-            LinearLayout.LayoutParams overlayLabelLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-            overlayLabelLp.topMargin = pad / 2;
-            overlayLabel.setLayoutParams(overlayLabelLp);
-            root.addView(overlayLabel);
-
-            Switch overlaySwitch = new Switch(this);
-            overlaySwitch.setChecked(overlayControlsEnabled);
-            overlaySwitch.setOnCheckedChangeListener((buttonView, isChecked) -> setOverlayControlsEnabled(isChecked));
-            root.addView(overlaySwitch);
-
-        // Actions (stacked vertically, similar width to dropdowns).
-        // Only show Quit Game while in a game.
-        if (inGame) {
-            LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-            btnLp.topMargin = pad;
-
-            Button quitBtn = new Button(this);
-            quitBtn.setLayoutParams(btnLp);
-            quitBtn.setText("Quit Game");
-            quitBtn.setOnClickListener(v -> {
-                if (settingsDialog != null) {
-                    settingsDialog.dismiss();
-                }
-                singleScreenTopOnly = false;
-                nativeReturnToMenu();
-            });
-            root.addView(quitBtn);
-
-            // Single-screen only: allow rendering just the top panel.
-            // Do not show this option at all if an external display is connected.
-            if (!hasExternalDisplay) {
-                LinearLayout.LayoutParams btnLp3 = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT);
-                btnLp3.topMargin = pad / 2;
-
-                Button topOnlyBtn = new Button(this);
-                topOnlyBtn.setLayoutParams(btnLp3);
-                topOnlyBtn.setText(singleScreenTopOnly ? "Show both screens" : "Top screen only");
-                topOnlyBtn.setOnClickListener(v -> {
-                    singleScreenTopOnly = !singleScreenTopOnly;
-                    // Ensure the emulation-driver panel is TOP when in top-only mode.
-                    nativeSetEmulationDriverPanel(0);
-                    if (settingsDialog != null) {
-                        settingsDialog.dismiss();
-                    }
-                });
-                root.addView(topOnlyBtn);
-            }
-        }
-
-        LinearLayout.LayoutParams btnLp2 = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnLp2.topMargin = inGame ? (pad / 2) : pad;
-
-        Button closeBtn = new Button(this);
-        closeBtn.setLayoutParams(btnLp2);
-        closeBtn.setText("Close");
-        closeBtn.setOnClickListener(v -> {
-            if (settingsDialog != null) {
-                settingsDialog.dismiss();
-            }
-        });
-        root.addView(closeBtn);
-
-        MaterialAlertDialogBuilder b = new MaterialAlertDialogBuilder(this);
-        b.setTitle("Settings");
-        b.setView(root);
-        b.setCancelable(true);
-
-        settingsDialog = b.create();
-        settingsDialog.setOnDismissListener(dlg -> {
-            settingsDialog = null;
-            // Resume emulation if we dismissed the menu while still in-game.
-            if (nativeGetAppMode() == MODE_GAME) {
-                nativeSetPaused(false);
-            }
-        });
-        settingsDialog.show();
-    }
-
-    private static float getCenteredAxis(MotionEvent event, InputDevice device, int axis) {
-        if (device == null) {
-            return 0.0f;
-        }
-        InputDevice.MotionRange range = device.getMotionRange(axis, event.getSource());
-        if (range == null) {
-            return 0.0f;
-        }
-        float value = event.getAxisValue(axis);
-        float flat = range.getFlat();
-        if (Math.abs(value) <= flat) {
-            return 0.0f;
-        }
-        return value;
-    }
-
-    private void setControllerBit(int bit, boolean down) {
-        int newMask = down ? (controllerMask | bit) : (controllerMask & ~bit);
-        if (newMask != controllerMask) {
-            controllerMask = newMask;
-            pushControllerMask();
-        }
-    }
-
-    private void pushControllerMask() {
-        nativeSetControllerMask(controllerMask | overlayMask);
-    }
-
-    private int dp(int v) {
-        return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
-    }
-
-    private void setOverlayBit(int bit, boolean down) {
-        int newMask = down ? (overlayMask | bit) : (overlayMask & ~bit);
-        if (newMask != overlayMask) {
-            overlayMask = newMask;
-            pushControllerMask();
-        }
-    }
-
-    private GradientDrawable makeOverlayShape(boolean oval, float cornerRadiusPx) {
-        GradientDrawable d = new GradientDrawable();
-        d.setShape(oval ? GradientDrawable.OVAL : GradientDrawable.RECTANGLE);
-        // For rectangle shapes, cornerRadius controls rounding (use height/2 for capsule buttons).
-        if (!oval) {
-            d.setCornerRadius(cornerRadiusPx);
-        }
-        d.setColor(Color.argb(110, 20, 20, 20));
-        d.setStroke(dp(1), Color.argb(120, 255, 255, 255));
-        return d;
-    }
-
-    private Button makeOverlayButton(String label, int bit, int widthPx, int heightPx, boolean circle, boolean pill) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-
-        b.setTextColor(Color.argb(220, 255, 255, 255));
-        b.setTextSize(13);
-        b.setPadding(0, 0, 0, 0);
-        b.setMinWidth(0);
-        b.setMinHeight(0);
-
-        // Make it look like a translucent overlay button (no default background).
-        // - circle: full oval
-        // - pill: capsule (flat top/bottom, rounded ends) => rounded-rect with radius=height/2
-        final boolean oval = circle;
-        final float corner = pill ? (heightPx * 0.5f) : dp(10);
-        b.setBackground(makeOverlayShape(oval, corner));
-        b.setAlpha(0.65f);
-        b.setOnTouchListener((v, event) -> {
-            int a = event.getActionMasked();
-            if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_POINTER_DOWN) {
-                setOverlayBit(bit, true);
-                v.setPressed(true);
-                v.setAlpha(0.9f);
-                return true;
-            }
-            if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_POINTER_UP || a == MotionEvent.ACTION_CANCEL) {
-                setOverlayBit(bit, false);
-                v.setPressed(false);
-                v.setAlpha(0.65f);
-                return true;
-            }
-            return true;
-        });
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(widthPx, heightPx);
-        lp.leftMargin = dp(4);
-        lp.rightMargin = dp(4);
-        lp.topMargin = dp(4);
-        lp.bottomMargin = dp(4);
-        b.setLayoutParams(lp);
-        return b;
-    }
-
-    private final class DpadView extends View {
-        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Paint pressedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private int activeBit = 0;
-
-        DpadView(Context ctx) {
-            super(ctx);
-            setAlpha(0.75f);
-            setClickable(true);
-
-            fillPaint.setStyle(Paint.Style.FILL);
-            fillPaint.setColor(Color.argb(110, 20, 20, 20));
-
-            pressedPaint.setStyle(Paint.Style.FILL);
-            pressedPaint.setColor(Color.argb(160, 255, 255, 255));
-
-            strokePaint.setStyle(Paint.Style.STROKE);
-            strokePaint.setStrokeWidth(dp(1));
-            strokePaint.setColor(Color.argb(120, 255, 255, 255));
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float w = getWidth();
-            float h = getHeight();
-            float cx = w * 0.5f;
-            float cy = h * 0.5f;
-
-            float arm = Math.min(w, h) * 0.33f;
-            float thick = Math.min(w, h) * 0.26f;
-            float r = thick * 0.35f;
-
-
-            // Arms + center rects.
-            RectF center = new RectF(cx - thick * 0.5f, cy - thick * 0.5f, cx + thick * 0.5f, cy + thick * 0.5f);
-            RectF up = new RectF(cx - thick * 0.5f, cy - arm - thick * 0.5f, cx + thick * 0.5f, cy - thick * 0.5f);
-            RectF down = new RectF(cx - thick * 0.5f, cy + thick * 0.5f, cx + thick * 0.5f, cy + arm + thick * 0.5f);
-            RectF left = new RectF(cx - arm - thick * 0.5f, cy - thick * 0.5f, cx - thick * 0.5f, cy + thick * 0.5f);
-            RectF right = new RectF(cx + thick * 0.5f, cy - thick * 0.5f, cx + arm + thick * 0.5f, cy + thick * 0.5f);
-
-            // Draw as one D-pad: fill overlapping stems (no internal seams).
-            RectF vert = new RectF(cx - thick * 0.5f, cy - arm - thick * 0.5f, cx + thick * 0.5f, cy + arm + thick * 0.5f);
-            RectF hori = new RectF(cx - arm - thick * 0.5f, cy - thick * 0.5f, cx + arm + thick * 0.5f, cy + thick * 0.5f);
-            canvas.drawRoundRect(vert, r, r, fillPaint);
-            canvas.drawRoundRect(hori, r, r, fillPaint);
-            canvas.drawRoundRect(center, r, r, fillPaint);
-
-            // Pressed highlight (only the active arm).
-            if (activeBit == CTL_DPAD_UP) canvas.drawRoundRect(up, r, r, pressedPaint);
-            if (activeBit == CTL_DPAD_DOWN) canvas.drawRoundRect(down, r, r, pressedPaint);
-            if (activeBit == CTL_DPAD_LEFT) canvas.drawRoundRect(left, r, r, pressedPaint);
-            if (activeBit == CTL_DPAD_RIGHT) canvas.drawRoundRect(right, r, r, pressedPaint);
-
-            // Single outline path around the union.
-            Path pv = new Path();
-            Path ph = new Path();
-            pv.addRoundRect(vert, r, r, Path.Direction.CW);
-            ph.addRoundRect(hori, r, r, Path.Direction.CW);
-            pv.op(ph, Path.Op.UNION);
-            canvas.drawPath(pv, strokePaint);
-        }
-
-        private int pickBit(float x, float y) {
-            float w = getWidth();
-            float h = getHeight();
-            float cx = w * 0.5f;
-            float cy = h * 0.5f;
-            float dx = x - cx;
-            float dy = y - cy;
-            float dead = Math.min(w, h) * 0.12f;
-            if (Math.abs(dx) < dead && Math.abs(dy) < dead) {
-                return 0;
-            }
-            if (Math.abs(dx) > Math.abs(dy)) {
-                return (dx < 0) ? CTL_DPAD_LEFT : CTL_DPAD_RIGHT;
-            }
-            return (dy < 0) ? CTL_DPAD_UP : CTL_DPAD_DOWN;
-        }
-
-        private void setActiveBit(int bit) {
-            if (bit == activeBit) {
-                return;
-            }
-            // Clear previous.
-            if (activeBit != 0) {
-                setOverlayBit(activeBit, false);
-            }
-            activeBit = bit;
-            if (activeBit != 0) {
-                setOverlayBit(activeBit, true);
-            }
-            invalidate();
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            int a = event.getActionMasked();
-            if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_MOVE) {
-                setActiveBit(pickBit(event.getX(), event.getY()));
-                return true;
-            }
-            if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) {
-                setActiveBit(0);
-                return true;
-            }
-            return super.onTouchEvent(event);
-        }
-    }
-
-    private void ensureOverlayControlsCreated() {
-        if (overlayControls != null) {
-            return;
-        }
-
-        overlayControls = new FrameLayout(this);
-        overlayControls.setLayoutParams(new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        overlayControls.setClickable(false);
-        overlayControls.setFocusable(false);
-        overlayControls.setVisibility(View.GONE);
-
-        final int btn = dp(58);
-        final int margin = dp(16);
-        final boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-        final int portraitBottomClearance = margin + dp(44) + dp(12);
-
-        // D-pad (bottom-left) - explicitly sized so FrameLayout gravity works correctly.
-        DpadView dpad = new DpadView(this);
-        int dpadSize = dp(170);
-
-        FrameLayout.LayoutParams dpadLp = new FrameLayout.LayoutParams(dpadSize, dpadSize);
-        dpadLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.START;
-        dpadLp.leftMargin = margin;
-        dpadLp.bottomMargin = landscape ? margin : portraitBottomClearance;
-        overlayControls.addView(dpad, dpadLp);
-
-        // ABXY (bottom-right)
-        LinearLayout abxy = new LinearLayout(this);
-        abxy.setOrientation(LinearLayout.VERTICAL);
-
-        LinearLayout abxyRowUp = new LinearLayout(this);
-        abxyRowUp.setOrientation(LinearLayout.HORIZONTAL);
-        abxyRowUp.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        View abxySpacerL = new View(this);
-        abxySpacerL.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
-        abxyRowUp.addView(abxySpacerL);
-        abxyRowUp.addView(makeOverlayButton("X", CTL_X, btn, btn, true, false));
-        View abxySpacerR = new View(this);
-        abxySpacerR.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
-        abxyRowUp.addView(abxySpacerR);
-
-        LinearLayout abxyRowMid = new LinearLayout(this);
-        abxyRowMid.setOrientation(LinearLayout.HORIZONTAL);
-        abxyRowMid.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        abxyRowMid.addView(makeOverlayButton("Y", CTL_Y, btn, btn, true, false));
-        View abxySpacer = new View(this);
-        abxySpacer.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
-        abxyRowMid.addView(abxySpacer);
-        abxyRowMid.addView(makeOverlayButton("A", CTL_A, btn, btn, true, false));
-
-        LinearLayout abxyRowDown = new LinearLayout(this);
-        abxyRowDown.setOrientation(LinearLayout.HORIZONTAL);
-        abxyRowDown.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        View abxySpacerDL = new View(this);
-        abxySpacerDL.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
-        abxyRowDown.addView(abxySpacerDL);
-        abxyRowDown.addView(makeOverlayButton("B", CTL_B, btn, btn, true, false));
-        View abxySpacerDR = new View(this);
-        abxySpacerDR.setLayoutParams(new LinearLayout.LayoutParams(btn, btn));
-        abxyRowDown.addView(abxySpacerDR);
-
-        abxy.addView(abxyRowUp);
-        abxy.addView(abxyRowMid);
-        abxy.addView(abxyRowDown);
-
-        FrameLayout.LayoutParams abxyLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        abxyLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.END;
-        abxyLp.rightMargin = margin;
-        abxyLp.bottomMargin = landscape ? margin : portraitBottomClearance;
-        overlayControls.addView(abxy, abxyLp);
-
-        // Start/Select (oval buttons). In landscape: Select top-left, Start top-right.
-        int ssW = dp(112);
-        int ssH = dp(44);
-        Button select = makeOverlayButton("Select", CTL_SELECT, ssW, ssH, false, true);
-        Button start = makeOverlayButton("Start", CTL_START, ssW, ssH, false, true);
-
-        FrameLayout.LayoutParams selectLp = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT);
-        FrameLayout.LayoutParams startLp = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT);
-
-        if (landscape) {
-            selectLp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
-            selectLp.leftMargin = margin;
-            selectLp.topMargin = margin;
-
-            startLp.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
-            startLp.rightMargin = margin;
-            startLp.topMargin = margin;
-        } else {
-            // Portrait: keep them near bottom center.
-            selectLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
-            selectLp.bottomMargin = margin;
-            selectLp.rightMargin = dp(60);
-
-            startLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL;
-            startLp.bottomMargin = margin;
-            startLp.leftMargin = dp(60);
-        }
-
-        overlayControls.addView(select, selectLp);
-        overlayControls.addView(start, startLp);
-    }
-
-    private void setOverlayControlsEnabled(boolean enabled) {
-        overlayControlsEnabled = enabled;
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .edit()
-                .putBoolean(PREF_SHOW_OVERLAY_CONTROLS, enabled)
-                .apply();
-        runOnUiThread(() -> {
-            if (rootView == null) {
-                return;
-            }
-            ensureOverlayControlsCreated();
-            if (overlayControls.getParent() == null) {
-                rootView.addView(overlayControls);
-            }
-            overlayControls.setVisibility(enabled ? View.VISIBLE : View.GONE);
-        });
-
-        if (!enabled) {
-            overlayMask = 0;
-            pushControllerMask();
-        }
-    }
-
-    private static boolean isControllerEvent(KeyEvent event) {
-        if (event == null) {
-            return false;
-        }
-        int src = event.getSource();
-        return ((src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD)
-                || ((src & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK)
-                || ((src & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD);
-    }
-
-    private static boolean isJoystickEvent(MotionEvent event) {
-        if (event == null) {
-            return false;
-        }
-        int src = event.getSource();
-        return ((src & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK);
-    }
-
-    private final class SecondScreenPresentation extends Presentation {
-        private int secondTextureGeneration;
-        private int secondUiTexId;
-        private int uiLastGen;
-        private int uiLastMode;
-        private int uiLastChoice;
-
-        SecondScreenPresentation(Context outerContext, Display display) {
-            super(outerContext, display);
-        }
-
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            secondGlView = new GLSurfaceView(getContext());
-            secondGlView.setEGLContextClientVersion(3);
-            secondGlView.setEGLConfigChooser(8, 8, 8, 8, 16, 0);
-            secondGlView.setPreserveEGLContextOnPause(true);
-            secondGlView.setRenderer(new GLSurfaceView.Renderer() {
-                @Override
-                public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl, javax.microedition.khronos.egl.EGLConfig config) {
-                    nativeInit();
-
-                    // Load textures in this GL context too (dual-display devices commonly do NOT share textures).
-                    String[] names = nativeGetTextureAssetNames();
-                    String segName = (names != null && names.length > 0) ? names[0] : "";
-                    String bgName = (names != null && names.length > 1) ? names[1] : "";
-                    String csName = (names != null && names.length > 2) ? names[2] : "";
-
-                    TextureInfo seg = loadTextureFromAsset(segName);
-                    TextureInfo bg = loadTextureFromAsset(bgName);
-                    TextureInfo cs = loadTextureFromAsset(csName);
-
-                    nativeSetTextures(
-                            seg.id, seg.width, seg.height,
-                            bg.id, bg.width, bg.height,
-                            cs.id, cs.width, cs.height);
-
-                        TextureInfo ui = buildMenuUiTexture();
-                        secondUiTexId = ui.id;
-                        nativeSetUiTexture(ui.id, ui.width, ui.height);
-
-                    secondTextureGeneration = nativeGetTextureGeneration();
-                        uiLastGen = secondTextureGeneration;
-                        uiLastMode = nativeGetAppMode();
-                        uiLastChoice = nativeGetMenuLoadChoice();
-                }
-
-                @Override
-                public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl, int width, int height) {
-                    nativeResize(width, height);
-                }
-
-                @Override
-                public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl) {
-                    if (!dualDisplayEnabled) {
-                        return;
-                    }
-                    int gen = nativeGetTextureGeneration();
-                    if (gen != secondTextureGeneration) {
-                        // Reload textures in this context.
-                        String[] names = nativeGetTextureAssetNames();
-                        String segName = (names != null && names.length > 0) ? names[0] : "";
-                        String bgName = (names != null && names.length > 1) ? names[1] : "";
-                        String csName = (names != null && names.length > 2) ? names[2] : "";
-
-                        TextureInfo seg = loadTextureFromAsset(segName);
-                        TextureInfo bg = loadTextureFromAsset(bgName);
-                        TextureInfo cs = loadTextureFromAsset(csName);
-
-                        nativeSetTextures(
-                                seg.id, seg.width, seg.height,
-                                bg.id, bg.width, bg.height,
-                                cs.id, cs.width, cs.height);
-
-                        if (secondUiTexId != 0) {
-                            int[] t = new int[]{secondUiTexId};
-                            GLES30.glDeleteTextures(1, t, 0);
-                            secondUiTexId = 0;
-                        }
-                        TextureInfo ui = buildMenuUiTexture();
-                        secondUiTexId = ui.id;
-                        nativeSetUiTexture(ui.id, ui.width, ui.height);
-                        secondTextureGeneration = gen;
-                        uiLastGen = gen;
-                    }
-
-                    int mode = nativeGetAppMode();
-                    int choice = nativeGetMenuLoadChoice();
-                    if (mode != MODE_GAME && (mode != uiLastMode || choice != uiLastChoice || gen != uiLastGen)) {
-                        if (secondUiTexId != 0) {
-                            int[] t = new int[]{secondUiTexId};
-                            GLES30.glDeleteTextures(1, t, 0);
-                            secondUiTexId = 0;
-                        }
-                        TextureInfo ui = buildMenuUiTexture();
-                        secondUiTexId = ui.id;
-                        nativeSetUiTexture(ui.id, ui.width, ui.height);
-                        uiLastMode = mode;
-                        uiLastChoice = choice;
-                        uiLastGen = gen;
-                    }
-
-                    // Secondary (physical top) display: render the TOP panel.
-                    nativeRenderPanel(0);
-                }
-            });
-            setContentView(secondGlView);
-        }
-
-        @Override
-        public void onDisplayRemoved() {
-            super.onDisplayRemoved();
-            dualDisplayEnabled = false;
-        }
-    }
-
-    private static final class TextureInfo {
-        final int id;
-        final int width;
-        final int height;
-
-        TextureInfo(int id, int width, int height) {
-            this.id = id;
-            this.width = width;
-            this.height = height;
-        }
-    }
-
-    private TextureInfo loadTextureFromAsset(String assetName) {
-        if (assetName == null || assetName.isEmpty()) {
-            return new TextureInfo(0, 0, 0);
-        }
-
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-
-        Bitmap bitmap;
-        try (InputStream is = getAssets().open(assetName)) {
-            bitmap = BitmapFactory.decodeStream(is, null, options);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new TextureInfo(0, 0, 0);
-        }
-
-        if (bitmap == null) {
-            return new TextureInfo(0, 0, 0);
-        }
-
-        if (bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
-            Bitmap converted = bitmap.copy(Bitmap.Config.ARGB_8888, false);
-            bitmap.recycle();
-            bitmap = converted;
-        }
-
-        int[] tex = new int[1];
-        GLES30.glGenTextures(1, tex, 0);
-        int texId = tex[0];
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texId);
-
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
-
-        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1);
-        GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0);
-
-        int w = bitmap.getWidth();
-        int h = bitmap.getHeight();
-        bitmap.recycle();
-
-        return new TextureInfo(texId, w, h);
-    }
-
-    private TextureInfo loadTextureFromBitmap(Bitmap bitmap) {
-        if (bitmap == null) {
-            return new TextureInfo(0, 0, 0);
-        }
-
-        if (bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
-            Bitmap converted = bitmap.copy(Bitmap.Config.ARGB_8888, false);
-            bitmap.recycle();
-            bitmap = converted;
-        }
-
-        int[] tex = new int[1];
-        GLES30.glGenTextures(1, tex, 0);
-        int texId = tex[0];
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texId);
-
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
-
-        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1);
-        GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0);
-
-        int w = bitmap.getWidth();
-        int h = bitmap.getHeight();
-        bitmap.recycle();
-
-        return new TextureInfo(texId, w, h);
-    }
-
-    private TextureInfo buildMenuUiTexture() {
-        // RGDS/Android: menu renders into a 640x480 logical panel.
-        final int w = 640;
-        final int h = 480;
-        final float s = w / 400.0f;
-
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bmp);
-        canvas.drawColor(Color.BLACK);
-
-        String[] info = nativeGetSelectedGameInfo();
-        String name = (info != null && info.length > 0) ? info[0] : "";
-        String date = (info != null && info.length > 1) ? info[1] : "";
-
-        Paint titlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        titlePaint.setColor(Color.WHITE);
-        titlePaint.setTextAlign(Paint.Align.CENTER);
-
-        Paint subPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        subPaint.setColor(Color.LTGRAY);
-        subPaint.setTextAlign(Paint.Align.CENTER);
-
-        float titleSize = 34.0f * s;
-        titlePaint.setTextSize(titleSize);
-        while (titleSize > 18.0f * s && titlePaint.measureText(name) > (w - 20.0f * s)) {
-            titleSize -= 2.0f * s;
-            titlePaint.setTextSize(titleSize);
-        }
-        subPaint.setTextSize(18.0f * s);
-
-        float cx = w * 0.5f;
-        canvas.drawText(name, cx, 80.0f * s, titlePaint);
-        if (!date.isEmpty()) {
-            canvas.drawText(date, cx, 112.0f * s, subPaint);
-        }
-
-        int mode = nativeGetAppMode();
-        if (mode == MODE_MENU_SELECT) {
-            subPaint.setColor(Color.GRAY);
-            canvas.drawText("Left/Right: select", cx, 170.0f * s, subPaint);
-            canvas.drawText("Tap center or press A", cx, 200.0f * s, subPaint);
-        } else if (mode == MODE_MENU_LOAD_PROMPT) {
-            boolean hasSave = nativeMenuHasSaveState();
-            int choice = nativeGetMenuLoadChoice();
-
-            subPaint.setColor(Color.WHITE);
-            canvas.drawText("Start:", cx, 160.0f * s, subPaint);
-
-            Paint optPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            optPaint.setTextAlign(Paint.Align.CENTER);
-            optPaint.setTextSize(20.0f * s);
-            optPaint.setColor(Color.LTGRAY);
-
-            String left = (choice == 0) ? "> Load fresh" : "Load fresh";
-            String right = hasSave
-                    ? ((choice == 1) ? "> Load savestate" : "Load savestate")
-                    : "No savestate";
-
-            canvas.drawText(left, w * 0.25f, 205.0f * s, optPaint);
-            canvas.drawText(right, w * 0.75f, 205.0f * s, optPaint);
-
-            subPaint.setColor(Color.GRAY);
-            subPaint.setTextSize(16.0f * s);
-            canvas.drawText("B: back", cx, 232.0f * s, subPaint);
-        }
-
-        return loadTextureFromBitmap(bmp);
+        settingsMenu.show(
+                overlayControls,
+                () -> secondScreenController != null && secondScreenController.hasExternalDisplayConnected(),
+                () -> singleScreenTopOnly,
+                v -> singleScreenTopOnly = v,
+                YokoiNative::nativeReturnToMenu
+        );
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        overlayControlsEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getBoolean(PREF_SHOW_OVERLAY_CONTROLS, false);
+        YokoiNative.nativeSetAssetManager(getAssets());
+        YokoiNative.nativeSetStorageRoot(getFilesDir().getAbsolutePath());
 
-        nativeSetAssetManager(getAssets());
-        nativeSetStorageRoot(getFilesDir().getAbsolutePath());
-
-        displayManager = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+        secondScreenController = new SecondScreenController(this, () -> singleScreenTopOnly = false);
 
         glView = new GLSurfaceView(this);
         glView.setEGLContextClientVersion(3);
@@ -1024,10 +74,10 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl, javax.microedition.khronos.egl.EGLConfig config) {
-                nativeInit();
+                YokoiNative.nativeInit();
 
                 // Textures must be created on the GL thread.
-                String[] names = nativeGetTextureAssetNames();
+                String[] names = YokoiNative.nativeGetTextureAssetNames();
                 String segName = (names != null && names.length > 0) ? names[0] : "";
                 String bgName = (names != null && names.length > 1) ? names[1] : "";
                 String csName = (names != null && names.length > 2) ? names[2] : "";
@@ -1040,36 +90,38 @@ public final class MainActivity extends Activity {
                 lastBgTexId = bg.id;
                 lastCsTexId = cs.id;
 
-                nativeSetTextures(
+                YokoiNative.nativeSetTextures(
                         seg.id, seg.width, seg.height,
                         bg.id, bg.width, bg.height,
                         cs.id, cs.width, cs.height);
 
-                TextureInfo ui = buildMenuUiTexture();
+                TextureInfo ui = MenuUiTextureBuilder.buildMenuUiTexture();
                 lastUiTexId = ui.id;
-                nativeSetUiTexture(ui.id, ui.width, ui.height);
-                startAudioIfNeeded();
+                YokoiNative.nativeSetUiTexture(ui.id, ui.width, ui.height);
+                audioDriver.startIfNeeded();
 
-                textureGeneration = nativeGetTextureGeneration();
+                textureGeneration = YokoiNative.nativeGetTextureGeneration();
                 uiLastGen = textureGeneration;
-                uiLastMode = nativeGetAppMode();
-                uiLastChoice = nativeGetMenuLoadChoice();
+                uiLastMode = YokoiNative.nativeGetAppMode();
+                uiLastChoice = YokoiNative.nativeGetMenuLoadChoice();
 
                 // Attempt to start a second physical display if present.
                     runOnUiThread(() -> {
-                        tryStartSecondDisplay();
+                        if (secondScreenController != null) {
+                            secondScreenController.tryStartSecondDisplay();
+                        }
                     });
             }
 
             @Override
             public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl, int width, int height) {
-                nativeResize(width, height);
-                nativeSetTouchSurfaceSize(width, height);
+                YokoiNative.nativeResize(width, height);
+                YokoiNative.nativeSetTouchSurfaceSize(width, height);
             }
 
             @Override
             public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl) {
-                int gen = nativeGetTextureGeneration();
+                int gen = YokoiNative.nativeGetTextureGeneration();
                 if (gen != textureGeneration) {
                     int[] ids = new int[]{lastSegTexId, lastBgTexId, lastCsTexId, lastUiTexId};
                     for (int id : ids) {
@@ -1083,7 +135,7 @@ public final class MainActivity extends Activity {
                     lastCsTexId = 0;
                     lastUiTexId = 0;
 
-                    String[] names = nativeGetTextureAssetNames();
+                    String[] names = YokoiNative.nativeGetTextureAssetNames();
                     String segName = (names != null && names.length > 0) ? names[0] : "";
                     String bgName = (names != null && names.length > 1) ? names[1] : "";
                     String csName = (names != null && names.length > 2) ? names[2] : "";
@@ -1096,50 +148,50 @@ public final class MainActivity extends Activity {
                     lastBgTexId = bg.id;
                     lastCsTexId = cs.id;
 
-                    nativeSetTextures(
+                        YokoiNative.nativeSetTextures(
                             seg.id, seg.width, seg.height,
                             bg.id, bg.width, bg.height,
                             cs.id, cs.width, cs.height);
 
-                        TextureInfo ui = buildMenuUiTexture();
+                        TextureInfo ui = MenuUiTextureBuilder.buildMenuUiTexture();
                         lastUiTexId = ui.id;
-                        nativeSetUiTexture(ui.id, ui.width, ui.height);
+                        YokoiNative.nativeSetUiTexture(ui.id, ui.width, ui.height);
 
-                    stopAudio();
-                    startAudioIfNeeded();
+                    audioDriver.stop();
+                    audioDriver.startIfNeeded();
 
                     textureGeneration = gen;
                     uiLastGen = gen;
                 }
 
-                int mode = nativeGetAppMode();
-                if (mode != MODE_GAME) {
+                int mode = YokoiNative.nativeGetAppMode();
+                if (mode != AppModes.MODE_GAME) {
                     // Leaving the game always returns to the default two-panel layout.
                     singleScreenTopOnly = false;
                 }
-                int choice = nativeGetMenuLoadChoice();
-                if (mode != MODE_GAME && (mode != uiLastMode || choice != uiLastChoice || gen != uiLastGen)) {
+                int choice = YokoiNative.nativeGetMenuLoadChoice();
+                if (mode != AppModes.MODE_GAME && (mode != uiLastMode || choice != uiLastChoice || gen != uiLastGen)) {
                     if (lastUiTexId != 0) {
                         int[] t = new int[]{lastUiTexId};
                         GLES30.glDeleteTextures(1, t, 0);
                         lastUiTexId = 0;
                     }
-                    TextureInfo ui = buildMenuUiTexture();
+                    TextureInfo ui = MenuUiTextureBuilder.buildMenuUiTexture();
                     lastUiTexId = ui.id;
-                    nativeSetUiTexture(ui.id, ui.width, ui.height);
+                    YokoiNative.nativeSetUiTexture(ui.id, ui.width, ui.height);
                     uiLastMode = mode;
                     uiLastChoice = choice;
                     uiLastGen = gen;
                 }
 
-                if (dualDisplayEnabled) {
+                if (secondScreenController != null && secondScreenController.isDualDisplayEnabled()) {
                     // Default (physical bottom / touch) display: render the BOTTOM panel.
-                    nativeRenderPanel(1);
-                } else if (singleScreenTopOnly && !hasExternalDisplayConnected()) {
+                    YokoiNative.nativeRenderPanel(1);
+                } else if (singleScreenTopOnly && !(secondScreenController != null && secondScreenController.hasExternalDisplayConnected())) {
                     // Single-display convenience mode.
-                    nativeRenderPanel(0);
+                    YokoiNative.nativeRenderPanel(0);
                 } else {
-                    nativeRender();
+                    YokoiNative.nativeRender();
                 }
             }
         });
@@ -1148,7 +200,7 @@ public final class MainActivity extends Activity {
         glView.requestFocus();
 
         glView.setOnTouchListener((v, event) -> {
-            nativeTouch(event.getX(), event.getY(), event.getActionMasked());
+            YokoiNative.nativeTouch(event.getX(), event.getY(), event.getActionMasked());
             return true;
         });
 
@@ -1157,390 +209,80 @@ public final class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
         rootView.addView(glView);
-        // Overlay controls are created lazily, and hidden by default.
-        setContentView(rootView);
 
-        // Apply persisted overlay state.
-        setOverlayControlsEnabled(overlayControlsEnabled);
+        controllerRouter = new ControllerInputRouter();
+        overlayControls = new OverlayControls(this, controllerRouter);
+        rootView.addView(overlayControls.getView());
+
+        setContentView(rootView);
     }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (isControllerEvent(event)) {
-            int action = event.getAction();
-            boolean down = action == KeyEvent.ACTION_DOWN;
-            int keyCode = event.getKeyCode();
-            switch (keyCode) {
-                case KeyEvent.KEYCODE_DPAD_UP:
-                    lastDpadKeyEventUptimeMs = android.os.SystemClock.uptimeMillis();
-                    setControllerBit(CTL_DPAD_UP, down);
-                    return true;
-                case KeyEvent.KEYCODE_DPAD_DOWN:
-                    lastDpadKeyEventUptimeMs = android.os.SystemClock.uptimeMillis();
-                    setControllerBit(CTL_DPAD_DOWN, down);
-                    return true;
-                case KeyEvent.KEYCODE_DPAD_LEFT:
-                    lastDpadKeyEventUptimeMs = android.os.SystemClock.uptimeMillis();
-                    setControllerBit(CTL_DPAD_LEFT, down);
-                    return true;
-                case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    lastDpadKeyEventUptimeMs = android.os.SystemClock.uptimeMillis();
-                    setControllerBit(CTL_DPAD_RIGHT, down);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_A:
-                    setControllerBit(CTL_A, down);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_B:
-                    setControllerBit(CTL_B, down);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_X:
-                    setControllerBit(CTL_X, down);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_Y:
-                    setControllerBit(CTL_Y, down);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_START:
-                    setControllerBit(CTL_START, down);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_SELECT:
-                    setControllerBit(CTL_SELECT, down);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_L1:
-                case KeyEvent.KEYCODE_BUTTON_L2:
-                    setControllerBit(CTL_L1, down);
-                    return true;
-                default:
-                    break;
-            }
+        if (controllerRouter != null && controllerRouter.dispatchKeyEvent(event)) {
+            return true;
         }
         return super.dispatchKeyEvent(event);
     }
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
-        if (isJoystickEvent(event)) {
-            // If the device provides DPAD KeyEvents, prefer those; some controllers also emit
-            // joystick hat values that can get "stuck" or noisy.
-            long now = android.os.SystemClock.uptimeMillis();
-            if (now - lastDpadKeyEventUptimeMs < 200) {
-                return true;
-            }
-
-            final float dead = 0.35f;
-            InputDevice dev = event.getDevice();
-
-            float x = getCenteredAxis(event, dev, MotionEvent.AXIS_HAT_X);
-            float y = getCenteredAxis(event, dev, MotionEvent.AXIS_HAT_Y);
-
-            // Some devices don't provide HAT axes; fall back to left stick.
-            if (x == 0.0f && y == 0.0f) {
-                x = getCenteredAxis(event, dev, MotionEvent.AXIS_X);
-                y = getCenteredAxis(event, dev, MotionEvent.AXIS_Y);
-            }
-
-            boolean left = x < -dead;
-            boolean right = x > dead;
-            boolean up = y < -dead;
-            boolean down = y > dead;
-
-            // Update the DPAD bits from axes.
-            int newMask = controllerMask;
-            newMask = left ? (newMask | CTL_DPAD_LEFT) : (newMask & ~CTL_DPAD_LEFT);
-            newMask = right ? (newMask | CTL_DPAD_RIGHT) : (newMask & ~CTL_DPAD_RIGHT);
-            newMask = up ? (newMask | CTL_DPAD_UP) : (newMask & ~CTL_DPAD_UP);
-            newMask = down ? (newMask | CTL_DPAD_DOWN) : (newMask & ~CTL_DPAD_DOWN);
-
-            if (newMask != controllerMask) {
-                controllerMask = newMask;
-                pushControllerMask();
-            }
+        if (controllerRouter != null && controllerRouter.onGenericMotionEvent(event)) {
             return true;
         }
         return super.onGenericMotionEvent(event);
     }
 
-    private boolean hasExternalDisplayConnected() {
-        if (displayManager == null) {
-            return false;
-        }
-        Display defaultDisplay = getWindowManager().getDefaultDisplay();
-        int defaultId = defaultDisplay != null ? defaultDisplay.getDisplayId() : Display.DEFAULT_DISPLAY;
-        for (Display d : displayManager.getDisplays()) {
-            if (d != null && d.getDisplayId() != defaultId) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void tryStartSecondDisplay() {
-        if (displayManager == null || secondPresentation != null) {
-            return;
-        }
-        Display defaultDisplay = getWindowManager().getDefaultDisplay();
-        int defaultId = defaultDisplay != null ? defaultDisplay.getDisplayId() : Display.DEFAULT_DISPLAY;
-
-        Display candidate = null;
-        for (Display d : displayManager.getDisplays()) {
-            if (d != null && d.getDisplayId() != defaultId) {
-                candidate = d;
-                break;
-            }
-        }
-
-        if (candidate == null) {
-            dualDisplayEnabled = false;
-            return;
-        }
-
-        // External display present: never keep single-screen top-only mode.
-        singleScreenTopOnly = false;
-
-        secondPresentation = new SecondScreenPresentation(this, candidate);
-        try {
-            secondPresentation.show();
-            dualDisplayEnabled = true;
-            // Main (touch) display renders panel 1 in dual-display mode, so make it the emulation driver.
-            nativeSetEmulationDriverPanel(1);
-        } catch (RuntimeException e) {
-            // If the display cannot be used, fall back to single-screen combined layout.
-            dualDisplayEnabled = false;
-            secondPresentation = null;
-            nativeSetEmulationDriverPanel(0);
-        }
-    }
-
-    private void stopSecondDisplay() {
-        dualDisplayEnabled = false;
-        nativeSetEmulationDriverPanel(0);
-        if (secondGlView != null) {
-            try {
-                secondGlView.onPause();
-            } catch (RuntimeException ignored) {
-            }
-            secondGlView = null;
-        }
-        if (secondPresentation != null) {
-            try {
-                secondPresentation.dismiss();
-            } catch (RuntimeException ignored) {
-            }
-            secondPresentation = null;
-        }
-    }
-
-    private void stopAudio() {
-        // Preferred audio backend: native AAudio.
-        try {
-            nativeStopAaudio();
-        } catch (Throwable ignored) {
-        }
-
-        audioRunning = false;
-        if (audioThread != null) {
-            try {
-                audioThread.join(500);
-            } catch (InterruptedException ignored) {
-            }
-            audioThread = null;
-        }
-        if (audioTrack != null) {
-            try {
-                audioTrack.pause();
-                audioTrack.flush();
-                audioTrack.stop();
-            } catch (IllegalStateException ignored) {
-            }
-            audioTrack.release();
-            audioTrack = null;
-        }
-    }
-
-    private void startAudioIfNeeded() {
-        // Preferred audio backend: native AAudio.
-        try {
-            nativeStartAaudio();
-            return;
-        } catch (Throwable ignored) {
-            // Fall back to the legacy AudioTrack path below.
-        }
-
-        if (audioTrack != null || audioThread != null) {
-            return;
-        }
-
-        final int sourceRate = Math.max(1, nativeGetAudioSampleRate());
-        final int framesPerWrite = 256;
-
-        int sampleRate = sourceRate;
-        int minBytes = AudioTrack.getMinBufferSize(
-                sampleRate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT);
-        if (minBytes <= 0) {
-            // Fallback rates are widely supported.
-            sampleRate = 48000;
-            minBytes = AudioTrack.getMinBufferSize(
-                    sampleRate,
-                    AudioFormat.CHANNEL_OUT_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT);
-            if (minBytes <= 0) {
-                sampleRate = 44100;
-                minBytes = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT);
-            }
-            if (minBytes <= 0) {
-                // Give up quietly.
-                return;
-            }
-        }
-        // Keep the buffer small to reduce latency (the previous ~0.5s buffer adds noticeable lag).
-        // Use a small multiple of minBytes and ensure it's at least a few writes worth.
-        int bytesPerFrame = 2; // mono, PCM_16
-        int minForWrites = framesPerWrite * bytesPerFrame * 4; // ~4 callbacks worth
-        int bufferBytes = Math.max(minBytes * 2, minForWrites);
-
-        audioTrack = new AudioTrack.Builder()
-            .setAudioAttributes(new AudioAttributes.Builder()
-                .setLegacyStreamType(AudioManager.STREAM_MUSIC)
-                .setUsage(AudioAttributes.USAGE_GAME)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build())
-            .setAudioFormat(new AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setSampleRate(sampleRate)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .build())
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setBufferSizeInBytes(bufferBytes)
-            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-            .build();
-
-        if (audioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
-            audioTrack.release();
-            audioTrack = null;
-            return;
-        }
-
-        audioTrack.play();
-        audioRunning = true;
-
-        final int outputRate = sampleRate;
-        audioThread = new Thread(() -> {
-            short[] pcm = new short[framesPerWrite];
-
-            // If outputRate != sourceRate, resample a mono PCM stream with linear interpolation.
-            final boolean needResample = outputRate != sourceRate;
-            final float step = needResample ? (sourceRate / (float) outputRate) : 1.0f;
-            float srcPos = 0.0f;
-            final short[] src = needResample ? new short[512] : null;
-            int srcCount = 0;
-            int srcIndex = 0;
-
-            if (needResample) {
-                srcCount = nativeAudioRead(src, src.length);
-                srcIndex = 0;
-                srcPos = 0.0f;
-            }
-
-            while (audioRunning) {
-                if (!needResample) {
-                    nativeAudioRead(pcm, framesPerWrite);
-                } else {
-                    for (int i = 0; i < framesPerWrite; i++) {
-                        int i0 = srcIndex + (int) srcPos;
-                        float frac = srcPos - (int) srcPos;
-                        // Ensure we have i0 and i0+1.
-                        while (i0 + 1 >= srcCount) {
-                            // Shift remaining samples down.
-                            int remain = Math.max(0, srcCount - srcIndex);
-                            if (remain > 0) {
-                                System.arraycopy(src, srcIndex, src, 0, remain);
-                            }
-                            int got = nativeAudioRead(src, src.length - remain);
-                            srcCount = remain + Math.max(0, got);
-                            srcIndex = 0;
-                            srcPos = 0.0f;
-                            i0 = 0;
-                            frac = 0.0f;
-                            if (srcCount <= 1) {
-                                break;
-                            }
-                        }
-                        short s0 = (srcCount > 0) ? src[i0] : 0;
-                        short s1 = (srcCount > 1) ? src[i0 + 1] : s0;
-                        pcm[i] = (short) (s0 + (s1 - s0) * frac);
-                        srcPos += step;
-                        int adv = (int) srcPos;
-                        if (adv > 0) {
-                            srcIndex += adv;
-                            srcPos -= adv;
-                        }
-                    }
-                }
-                int wrote = audioTrack.write(pcm, 0, framesPerWrite);
-                if (wrote <= 0) {
-                    try {
-                        Thread.sleep(5);
-                    } catch (InterruptedException ignored) {
-                    }
-                }
-            }
-        }, "yokoi-audio");
-        audioThread.setDaemon(true);
-        audioThread.start();
-    }
     @Override
     protected void onPause() {
         super.onPause();
-        nativeAutoSaveState();
+        YokoiNative.nativeAutoSaveState();
         glView.onPause();
-        if (secondGlView != null) {
-            secondGlView.onPause();
-        }
         // Always dismiss the second display Presentation when backgrounding (Home/recents)
         // so it doesn't linger showing the last frame.
-        stopSecondDisplay();
-        if (settingsDialog != null && settingsDialog.isShowing()) {
-            settingsDialog.dismiss();
+        if (secondScreenController != null) {
+            secondScreenController.onPause();
         }
+        settingsMenu.dismissIfShowing();
         // Avoid stuck controller bits if a device disconnects or stops sending events.
-        controllerMask = 0;
-        overlayMask = 0;
-        pushControllerMask();
-        stopAudio();
+        if (controllerRouter != null) {
+            controllerRouter.clearAll();
+        }
+        audioDriver.stop();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         glView.onResume();
-        if (secondGlView != null) {
-            secondGlView.onResume();
-        } else {
-            tryStartSecondDisplay();
+        if (secondScreenController != null) {
+            secondScreenController.onResume();
         }
 
         // `onSurfaceCreated()` may not run again when resuming.
-        startAudioIfNeeded();
+        audioDriver.startIfNeeded();
     }
 
     @Override
     protected void onDestroy() {
-        stopSecondDisplay();
-        stopAudio();
-        nativeShutdown();
+        if (secondScreenController != null) {
+            secondScreenController.stopSecondDisplay();
+        }
+        audioDriver.stop();
+        YokoiNative.nativeShutdown();
         super.onDestroy();
     }
 
     @Override
     public void onBackPressed() {
-        if (settingsDialog != null && settingsDialog.isShowing()) {
-            settingsDialog.dismiss();
+        if (settingsMenu.isShowing()) {
+            settingsMenu.dismissIfShowing();
             return;
         }
         showSettingsMenu();
+    }
+
+    private TextureInfo loadTextureFromAsset(String assetName) {
+        return TextureLoader.loadTextureFromAsset(getAssets(), assetName);
     }
 }
