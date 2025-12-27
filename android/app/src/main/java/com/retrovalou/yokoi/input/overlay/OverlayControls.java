@@ -67,6 +67,10 @@ public final class OverlayControls {
         return (int) (v * activity.getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private int dpF(float v) {
+        return (int) (v * activity.getResources().getDisplayMetrics().density + 0.5f);
+    }
+
     private GradientDrawable makeOverlayShape(boolean oval, float cornerRadiusPx) {
         GradientDrawable d = new GradientDrawable();
         d.setShape(oval ? GradientDrawable.OVAL : GradientDrawable.RECTANGLE);
@@ -130,14 +134,34 @@ public final class OverlayControls {
         overlayRoot.setClickable(false);
         overlayRoot.setFocusable(false);
 
-        final int btn = dp(58);
-        final int margin = dp(16);
+        final float density = activity.getResources().getDisplayMetrics().density;
+        final float widthDp = activity.getResources().getDisplayMetrics().widthPixels / density;
+        final float heightDp = activity.getResources().getDisplayMetrics().heightPixels / density;
+
+        final float baseBtnDp = 58.0f;
+        final float baseDpadDp = 170.0f;
+        final float marginDp = 16.0f;
+
+        // ABXY max row width is ~ (3 * btn + 16dp) due to per-button margins.
+        final float requiredWidthDp = baseDpadDp + (3.0f * baseBtnDp) + (2.0f * marginDp) + 16.0f;
+        final float scaleW = widthDp / requiredWidthDp;
+        final float scaleH = heightDp / 640.0f;
+        float scale = Math.min(1.0f, Math.min(scaleW, scaleH));
+        scale = Math.max(0.75f, scale);
+
+        final int btn = dpF(baseBtnDp * scale);
+        final int margin = dpF(marginDp);
         final boolean landscape = activity.getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-        final int portraitBottomClearance = margin + dp(44) + dp(12);
+
+        // Start/Select sizing: slim in all cases, keep original placement rules.
+        final int ssW = dp(112);
+        final int ssH = dp(36);
+
+        final int portraitBottomClearance = margin + ssH + dp(12);
 
         // D-pad
         DpadView dpad = new DpadView(activity, router::setOverlayBit);
-        int dpadSize = dp(170);
+        int dpadSize = dpF(baseDpadDp * scale);
 
         FrameLayout.LayoutParams dpadLp = new FrameLayout.LayoutParams(dpadSize, dpadSize);
         dpadLp.gravity = Gravity.BOTTOM | Gravity.START;
@@ -193,17 +217,13 @@ public final class OverlayControls {
         overlayRoot.addView(abxy, abxyLp);
 
         // Start/Select
-        int ssW = dp(112);
-        int ssH = dp(44);
         Button select = makeOverlayButton("Select", ControllerBits.CTL_SELECT, ssW, ssH, false, true);
         Button start = makeOverlayButton("Start", ControllerBits.CTL_START, ssW, ssH, false, true);
 
-        FrameLayout.LayoutParams selectLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        FrameLayout.LayoutParams startLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
+        // Important: FrameLayout overrides the child's LayoutParams. Use explicit sizes here
+        // so Start/Select actually match ssW/ssH (and therefore keep the intended pill shape).
+        FrameLayout.LayoutParams selectLp = new FrameLayout.LayoutParams(ssW, ssH);
+        FrameLayout.LayoutParams startLp = new FrameLayout.LayoutParams(ssW, ssH);
 
         if (landscape) {
             selectLp.gravity = Gravity.TOP | Gravity.START;
