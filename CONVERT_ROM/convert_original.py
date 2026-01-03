@@ -13,21 +13,44 @@
 # 3. Post process any games if needed (e.g. Crab Grab, Spit Sparky)
 # 4. Files and config now ready to run convert_3ds.py to generate build data in 3DS format
 
+import argparse
+
 from source.extract_assets import extract_assets
 from source.generate_games_path import generate_games_path
 from source.crab_grab_game_processor import CrabGrabGameProcessor
 from source.spitball_sparky_game_processor import SpitballSparkyGameProcessor
 
-extract_assets()
 
-if generate_games_path() is False:
-    print("Missing files, check previous output for details")
-    exit(1)
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Prepare extracted artwork + generate games_path for a given target. "
+            "Then apply any per-game post-processing (Crab Grab, Spitball Sparky)."
+        )
+    )
+    parser.add_argument(
+        "--target",
+        default="3ds",
+        help="Target profile to use for metadata sizing (e.g. '3ds' or 'rgds').",
+    )
+    args = parser.parse_args()
 
-# Optional: post-process specific games that need special handling.
-processors = [CrabGrabGameProcessor(), SpitballSparkyGameProcessor()]
-for processor in processors:
-    if processor.load_info():
-        processor.post_process()
+    extract_assets()
 
-print("\nFiles processed and ready.\n\nYou can now run convert_3ds.py to generate the 3DS build data.")
+    if generate_games_path(args.target) is False:
+        print("Missing files, check previous output for details")
+        return 1
+
+    # Optional: post-process specific games that need special handling.
+    processors = [CrabGrabGameProcessor(args.target), SpitballSparkyGameProcessor(args.target)]
+    for processor in processors:
+        if processor.load_info():
+            processor.post_process()
+
+    print("\nFiles processed and ready.")
+    print("You can now run convert_3ds.py to generate build data for your target.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

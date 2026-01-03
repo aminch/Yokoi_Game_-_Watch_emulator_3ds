@@ -6,11 +6,12 @@
 #include "load_file.h"
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <3ds.h>
+#include <filesystem>
+#include "platform_paths.h"
 
-// Directory where save states are stored
-static const char* SAVESTATE_DIR = "sdmc:/3ds/yokoi_gw_saves";
+static std::string savestate_dir() {
+    return storage_path("yokoi_gw_saves");
+}
 
 // Get CPU type from CPU instance
 static CPUType get_cpu_type(SM5XX* cpu) {
@@ -23,20 +24,20 @@ const char* get_save_path(uint8_t game_index) {
     // Use game ref as some game name cause file saving errors
     const GW_rom* game = load_game(game_index);
     if(game) {
-        snprintf(path, sizeof(path), "%s/%s.sav", SAVESTATE_DIR, game->ref.c_str());
+        std::string dir = savestate_dir();
+        snprintf(path, sizeof(path), "%s/%s.sav", dir.c_str(), game->ref.c_str());
     } else {
         // Fallback to index-based name if game not found
-        snprintf(path, sizeof(path), "%s/game_%02d.sav", SAVESTATE_DIR, game_index);
+        std::string dir = savestate_dir();
+        snprintf(path, sizeof(path), "%s/game_%02d.sav", dir.c_str(), game_index);
     }
     return path;
 }
 
 // Ensure save directory exists
 static void ensure_save_directory() {
-    // Create /3ds directory if needed (should already exist)
-    mkdir("sdmc:/3ds", 0777);
-    // Create our save directory
-    mkdir(SAVESTATE_DIR, 0777);
+    std::error_code ec;
+    std::filesystem::create_directories(savestate_dir(), ec);
 }
 
 // Check if a save state file exists for a game
