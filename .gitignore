@@ -13,15 +13,19 @@ build/*
 !build/.gitkeep
 source/std/GW_ROM/*
 !source/std/GW_ROM/.gitkeep
+source/std/GW_ROM_RGDS/*
+!source/std/GW_ROM_RGDS/.gitkeep
 
 CONVERT_ROM/tmp/img/*
 !CONVERT_ROM/tmp/img/.gitkeep
 CONVERT_ROM/rom/*
 !CONVERT_ROM/rom/.gitkeep
+!CONVERT_ROM/rom/default_console.png
 
 *.pyc
 
 games_path.py
+games_path_*.py
 
 Yokoi*.3dsx
 Yokoi*.elf
@@ -30,3 +34,12 @@ Yokoi*.smdh
 
 .DS_Store
 Thumbs.db   
+
+android/app/build
+android/app/captures 
+android/app/outputs
+android/.gradle
+android/app/.cxx
+android/build
+android/app/release
+

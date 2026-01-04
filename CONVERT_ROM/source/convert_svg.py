@@ -13,8 +13,15 @@ def extract_translation(transform):
 
 
 
-def extract_group_segs(svg_path_list, output_dir, INKSCAPE_PATH):
+def extract_group_segs(svg_path_list, output_dir, INKSCAPE_PATH, export_dpi: int = 50):
     os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        dpi = int(export_dpi)
+    except Exception:
+        dpi = 50
+    if dpi <= 0:
+        dpi = 50
     
     # Collect all exports first
     export_commands = []
@@ -82,7 +89,7 @@ def extract_group_segs(svg_path_list, output_dir, INKSCAPE_PATH):
             commands = []
             for svg_path, png_path in export_commands:
                 # Inkscape shell command format
-                commands.append(f'file-open:{svg_path}; export-filename:{png_path}; export-dpi:50; export-do; file-close')
+                commands.append(f'file-open:{svg_path}; export-filename:{png_path}; export-dpi:{dpi}; export-do; file-close')
             
             commands.append('quit')
             
@@ -103,7 +110,7 @@ def extract_group_segs(svg_path_list, output_dir, INKSCAPE_PATH):
                     INKSCAPE_PATH, svg_path,
                     '--export-type=png', 
                     f'--export-filename={png_path}', 
-                    f'--export-dpi=50'
+                    f'--export-dpi={dpi}'
                 ])
                 print(f' -- Export : {png_path}')
         

@@ -1,16 +1,19 @@
 #include "settings.h"
 #include "load_file.h"
+#include "platform_paths.h"
 #include <stdio.h>
 #include <string.h>
 
 // Global settings instance
 AppSettings g_settings;
 
-// Settings file path on SD card
-static const char* SETTINGS_FILE = "sdmc:/3ds/yokoi_gw_settings.dat";
+static std::string settings_file_path() {
+    return storage_path("yokoi_gw_settings.dat");
+}
 
 void load_settings() {
-    FILE* file = fopen(SETTINGS_FILE, "rb");
+    std::string path = settings_file_path();
+    FILE* file = fopen(path.c_str(), "rb");
     if (file) {
         size_t read = fread(&g_settings, sizeof(AppSettings), 1, file);
         fclose(file);
@@ -26,7 +29,8 @@ void load_settings() {
 }
 
 void save_settings() {
-    FILE* file = fopen(SETTINGS_FILE, "wb");
+    std::string path = settings_file_path();
+    FILE* file = fopen(path.c_str(), "wb");
     if (file) {
         fwrite(&g_settings, sizeof(AppSettings), 1, file);
         fclose(file);

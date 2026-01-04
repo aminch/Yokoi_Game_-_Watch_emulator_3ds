@@ -1,5 +1,6 @@
 """Generate ``games_path`` entries directly from ``default.lay`` files."""
 
+
 from __future__ import annotations
 
 import re
@@ -7,14 +8,16 @@ import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Iterable
 
 try:
     # When imported as part of the 'source' package
     from source.games_path_utils import GameEntry, write_games_path
+    from source.target_profiles import get_target
 except ImportError:
     # When run directly from the 'source' directory
     from games_path_utils import GameEntry, write_games_path
+    from target_profiles import get_target
 
 # Preferred background views ordered by desirability. Boolean marks multi-screen views.
 VIEW_PRIORITY: Sequence[Tuple[str, bool]] = (
@@ -27,6 +30,10 @@ VIEW_PRIORITY: Sequence[Tuple[str, bool]] = (
     ("Background Only", False),
     ("Backgrounds Only", True),
 )
+
+# set default img when console img is not set for a game
+default_img_console = r'.\rom\default_console.png'
+
 
 try:
     from source.games_path_utils import (
@@ -382,6 +389,8 @@ def _compute_transforms(surfaces: Sequence[SurfaceData]) -> List[List[List[int]]
 
 def _detect_multiscreen_config(
     surfaces: Sequence[SurfaceData],
+    left_right_size: Tuple[int, int],
+    top_bottom_size: Tuple[int, int],
 ) -> Tuple[List[List[int]], bool]:
     """Detect multi-screen orientation and return size_visual and two_in_one_screen flag.
     
@@ -409,10 +418,12 @@ def _detect_multiscreen_config(
     # If screens are primarily arranged horizontally (left/right)
     if dx > dy:
         # Left/right configuration
-        return [[200, 240], [200, 240]], True
+        w, h = left_right_size
+        return [[w, h], [w, h]], True
     else:
         # Top/bottom configuration
-        return [[320, 240], [320, 240]], False
+        w, h = top_bottom_size
+        return [[w, h], [w, h]], False
 
 
 def _find_rom_in_folder(folder: Path) -> Optional[Path]:
@@ -584,10 +595,14 @@ def _resolve_default_lay(
 
     return None, ""
 
-def generate_games_path() -> bool:
+def generate_games_path(target_name: str | None = None) -> bool:
+    if not target_name:
+        target_name = "3ds"
+    profile = get_target(target_name)
+
     script_dir = Path(__file__).resolve().parent.parent
     metadata_map = _load_game_metadata(script_dir)
-    rom_root = script_dir / "rom"
+    rom_root = script_dir / "rom" / "decompress"
     if not rom_root.exists():
         print("rom/ directory not found", file=sys.stderr)
         raise SystemExit(1)
@@ -643,11 +658,16 @@ def generate_games_path() -> bool:
         if transform_data and len(transform_data) < len(visuals):
             transform_data = []
 
-        size_visual_data, two_in_one_screen = _detect_multiscreen_config(surfaces)
+        size_visual_data, two_in_one_screen = _detect_multiscreen_config(
+            surfaces,
+            profile.multiscreen_left_right_size,
+            profile.multiscreen_top_bottom_size,
+        )
 
         console_path = _resolve_console_path(folder)
         if not console_path.exists():
             missing_console.append(console_path)
+            console_path = Path(default_img_console)
 
         melody_path = _find_melody_file(folder, fallback_folder)
 
@@ -700,7 +720,8 @@ def generate_games_path() -> bool:
 
     entries.sort(key=lambda item: item.key.lower())
 
-    destination = script_dir / "games_path.py"
+    destination_name = f"games_path_{profile.name}.py"
+    destination = script_dir / destination_name
     write_games_path(entries, script_dir, destination)
 
     print(f"Generated {len(entries)} games. Output -> {destination}")
@@ -723,4 +744,9 @@ def generate_games_path() -> bool:
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry point
-    success = generate_games_path()
+    # Optional: pass --target rgds (defaults to '3ds').
+    # Keep this lightweight (no argparse) to preserve original script behavior.
+    arg_target = None
+    if len(sys.argv) >= 3 and sys.argv[1] == "--target":
+        arg_target = sys.argv[2]
+    success = generate_games_path(arg_target)

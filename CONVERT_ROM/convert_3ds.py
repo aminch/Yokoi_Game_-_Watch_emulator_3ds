@@ -1,40 +1,154 @@
 import os
 import glob
 import shutil
+import importlib.util
+from pathlib import Path
 from PIL import Image, ImageEnhance
 import numpy as np
 from rectpack import newPacker
 from multiprocessing import Pool
 import functools
+from typing import Iterable
 
 from source import convert_svg as cs
 from source import img_manipulation as im
+from source.target_profiles import get_target
 
 
 
-INKSCAPE_PATH = r"C:\Program Files\Inkscape\bin\inkscape.exe"
+INKSCAPE_PATH = r"D:\Program Files\Inkscape\bin\inkscape.exe"
 
 destination_file = r"..\source\std\GW_ALL.h"
 destination_game_file = r"..\source\std\GW_ROM"
 destination_graphique_file = "../gfx/"
 
 reset_img_svg = False  # default; can be overridden via CLI
-resolution_up = [400, 240]
-resolution_down = [320, 240]
-demi_resolution_up = [200, 240]
 
+# These are set by the selected --target profile at runtime.
+resolution_up = [0, 0]
+resolution_down = [0, 0]
+demi_resolution_up = [0, 0]
 
-size_altas_check = [256, 512, 128, 32, 64, 1024]
+size_altas_check = []
 pad = 1
-console_atlas_size = [512, 256]
-console_size = [320, 240]
+console_atlas_size = [0, 0]
+console_size = [0, 0]
+
+export_dpi = 50
+size_scale = 1
+background_atlas_sizes = []
+
+# Target-specific texture output.
+# - 3DS uses tex3ds pipeline: .png + .t3s -> build generates .t3x and C++ points to .t3x.
+# - RGDS/Android uses runtime PNG loading: .png only; .t3s can exist but is intentionally blank.
+texture_path_prefix = "romfs:/gfx/"
+texture_path_ext = ".t3x"
+tex3ds_enabled = True
+gw_rom_include_dir = "GW_ROM"
 
 default_alpha_bright = 1.7
 default_fond_bright = 1.35
 default_rotate = False
 default_console = r'.\rom\default.png'
 
-from games_path import games_path
+
+def _load_games_path_for_target(target_name: str) -> dict:
+    """Load games_path dict for the given target.
+
+    Rule:
+    - <target> -> games_path_<target>.py
+
+    Paths are resolved relative to this script (CONVERT_ROM/).
+    """
+
+    script_dir = Path(__file__).resolve().parent
+    filename = f"games_path_{target_name}.py"
+    module_path = script_dir / filename
+    if not module_path.exists():
+        raise RuntimeError(f"{filename} not found at {module_path}")
+
+    spec = importlib.util.spec_from_file_location("games_path_module", str(module_path))
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load {filename}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[assignment]
+    loaded = getattr(module, "games_path", None)
+    if not isinstance(loaded, dict):
+        raise RuntimeError(f"{filename} does not define a 'games_path' dict")
+
+    return loaded
+
+
+def clean_games_path(games_path):
+    tmp_gamepath = {}
+    for key in games_path:
+        new_key = str(key).lower()
+        if(new_key not in tmp_gamepath):
+            tmp_gamepath[new_key] = games_path[key]
+    return tmp_gamepath
+
+
+
+def _round_up_to_one_of(value: int, candidates: Iterable[int]) -> int:
+    ordered = sorted(int(x) for x in candidates)
+    for c in ordered:
+        if value <= c:
+            return c
+    return ordered[-1] if ordered else value
+
+
+def apply_profile(target_name: str, out_gfx: str | None, out_gw_all: str | None, out_gw_rom_dir: str | None, dpi_override: int | None, scale_override: int | None):
+    global destination_file, destination_game_file, destination_graphique_file
+    global resolution_up, resolution_down, demi_resolution_up
+    global size_altas_check, console_atlas_size, console_size
+    global export_dpi, size_scale, background_atlas_sizes
+    global texture_path_prefix, texture_path_ext, tex3ds_enabled, gw_rom_include_dir
+
+    profile = get_target(target_name)
+
+    resolution_up = [profile.resolution_up[0], profile.resolution_up[1]]
+    resolution_down = [profile.resolution_down[0], profile.resolution_down[1]]
+    demi_resolution_up = [profile.demi_resolution_up[0], profile.demi_resolution_up[1]]
+    console_size = [profile.console_size[0], profile.console_size[1]]
+    console_atlas_size = [profile.console_atlas_size[0], profile.console_atlas_size[1]]
+    size_altas_check = list(profile.atlas_sizes)
+    background_atlas_sizes = list(profile.background_atlas_sizes)
+
+    export_dpi = int(dpi_override) if dpi_override is not None else int(profile.export_dpi)
+    if export_dpi <= 0:
+        export_dpi = int(profile.export_dpi)
+
+    size_scale = int(scale_override) if scale_override is not None else int(profile.size_scale)
+    if size_scale <= 0:
+        size_scale = int(profile.size_scale)
+
+    if out_gw_all is not None:
+        destination_file = out_gw_all
+    else:
+        destination_file = r"..\source\std\GW_ALL.h" if profile.name == "3ds" else r"..\source\std\GW_ALL_rgds.h"
+
+    if out_gw_rom_dir is not None:
+        destination_game_file = out_gw_rom_dir
+    else:
+        destination_game_file = r"..\source\std\GW_ROM" if profile.name == "3ds" else r"..\source\std\GW_ROM_RGDS"
+
+    if profile.name == "3ds":
+        texture_path_prefix = "romfs:/gfx/"
+        texture_path_ext = ".t3x"
+        tex3ds_enabled = True
+        gw_rom_include_dir = "GW_ROM"
+    else:
+        # Android/RGDS runtime loads PNGs directly from assets.
+        texture_path_prefix = "gfx/"
+        texture_path_ext = ".png"
+        tex3ds_enabled = False
+        gw_rom_include_dir = "GW_ROM_RGDS"
+
+    if out_gfx is not None:
+        destination_graphique_file = out_gfx
+    else:
+        destination_graphique_file = "../gfx/" if profile.name == "3ds" else "../gfx2x/"
 
 def sort_by_screen(name: str):
     img_screen_sort = []
@@ -125,10 +239,16 @@ def visual_data_file(name, size_list, background_path_list, rotate = False, mask
     packer, atlas_size = find_best_parquet(rects)            
     im.save_packed_img(packer, all_img, atlas_size, pad, destination_graphique_file, name)        
     with open(destination_graphique_file + 'segment_' + name + '.t3s', "w", encoding="utf-8") as f:
-        if(mask): f.write("-f rgba8 -z none\n" + 'segment_' + name + '.png')
-        else: f.write("-f a8 -z none\n" + 'segment_' + name + '.png')
+        if tex3ds_enabled:
+            if(mask):
+                f.write("-f rgba8 -z none\n" + 'segment_' + name + '.png')
+            else:
+                f.write("-f a8 -z none\n" + 'segment_' + name + '.png')
+        else:
+            # RGDS/Android does not use tex3ds; keep the file intentionally blank.
+            f.write("")
     
-    result = f'\nconst std::string path_segment_{name} = "romfs:/gfx/segment_{name}.t3x"; // Visual of segment -> Big unique texture'
+    result = f'\nconst std::string path_segment_{name} = "{texture_path_prefix}segment_{name}{texture_path_ext}"; // Visual of segment -> Big unique texture'
     result += segment_text(all_img, name, color_segment)
     
     int_mask = 0
@@ -151,10 +271,7 @@ def background_data_file(name, path_list = [], size_list = [], rotate = False, a
         atlas_size[1] += size[1]+2
    
     for i_a in range(2):
-        if(atlas_size[i_a] <= 128): atlas_size[i_a] = 128
-        elif(atlas_size[i_a] <= 256): atlas_size[i_a] = 256
-        elif(atlas_size[i_a] <= 512): atlas_size[i_a] = 512
-        else : atlas_size[i_a] = 1024
+        atlas_size[i_a] = _round_up_to_one_of(atlas_size[i_a], background_atlas_sizes or [atlas_size[i_a]])
         
     result_img = np.zeros((atlas_size[1], atlas_size[0], 4))
     curr_ind_r_img = 1
@@ -182,8 +299,11 @@ def background_data_file(name, path_list = [], size_list = [], rotate = False, a
         img = Image.fromarray(result_img.astype(np.uint8))
         img.save(destination_graphique_file + 'background_' + name + '.png')
         with open(destination_graphique_file + 'background_' + name + '.t3s', "w", encoding="utf-8") as f:
-            f.write("-f RGBA8 -z none\n" + 'background_' + name + '.png')
-        result = f'\nconst std::string path_background_{name} = "romfs:/gfx/background_{name}.t3x";\n'
+            if tex3ds_enabled:
+                f.write("-f RGBA8 -z none\n" + 'background_' + name + '.png')
+            else:
+                f.write("")
+        result = f'\nconst std::string path_background_{name} = "{texture_path_prefix}background_{name}{texture_path_ext}";\n'
     else:
         result = f'\nconst std::string path_background_{name} = "";\n'
         for s in size_list:
@@ -204,7 +324,7 @@ def visual_console_data(name, path_console):
     original_width, original_height = img.size
     
     # Calculate aspect ratios
-    target_ratio = console_size[0] / console_size[1]  # 320/240 = 1.333...
+    target_ratio = console_size[0] / console_size[1]
     image_ratio = original_width / original_height
     
     # Determine cuts for center crop to match target aspect ratio
@@ -236,9 +356,12 @@ def visual_console_data(name, path_console):
     img_f[0:img.shape[0], 0:img.shape[1], :] = img
     Image.fromarray(img_f, mode="RGBA").save(destination_graphique_file + 'console_' + name + '.png')
     with open(destination_graphique_file + 'console_' + name + '.t3s', "w", encoding="utf-8") as f:
-        f.write("-f RGB8 -z none\n" + 'console_' + name + '.png')
+        if tex3ds_enabled:
+            f.write("-f RGB8 -z none\n" + 'console_' + name + '.png')
+        else:
+            f.write("")
     pos_y = console_atlas_size[1]-img.shape[0]
-    result = f'\nconst std::string path_console_{name} = "romfs:/gfx/console_{name}.t3x";\n'
+    result = f'\nconst std::string path_console_{name} = "{texture_path_prefix}console_{name}{texture_path_ext}";\n'
     result += f"const uint16_t console_info_{name}[] = {{ {console_atlas_size[0]}, {console_atlas_size[1]}, 0, {pos_y}, {img.shape[1]}, {img.shape[0]} }}; \n\n"
 
     return result
@@ -291,7 +414,7 @@ def generate_game_file(destination_game_file, name, display_name, ref, date
     c_file += rom_text(name, rom_path)    
     c_file += melody_text(name, melody_path)
     
-    cs.extract_group_segs(visual_path, "./tmp/img/"+name, INKSCAPE_PATH)
+    cs.extract_group_segs(visual_path, "./tmp/img/"+name, INKSCAPE_PATH, export_dpi=export_dpi)
     text, new_size_screen = visual_data_file(name, size_visual, background_path, rotate, mask, color_segment, two_in_one_screen, transform)
     c_file += text
     
@@ -341,7 +464,8 @@ def generate_global_file(games_path, destination_file):
 #pragma once
 
 """
-    for key in games_path: c_file_final += f'#include "GW_ROM/{key}.h"\nextern const GW_rom {key};\n'
+    for key in games_path:
+        c_file_final += f'#include "{gw_rom_include_dir}/{key}.h"\nextern const GW_rom {key};\n'
 
     c_file_final += "\n\n\n\n"
     c_file_final += 'const GW_rom* GW_list[] = {&' + ', &'.join(games_path.keys()) + '};\n'
@@ -451,6 +575,8 @@ def process_single_game(args):
     melody_path = game_data.get('Melody_Rom', '')
     background_path = game_data.get('Background', [])
     size_visual = game_data.get('size_visual', [resolution_up, resolution_down])
+    if size_scale != 1:
+        size_visual = [[int(s[0] * size_scale), int(s[1] * size_scale)] for s in size_visual]
     path_console = game_data.get('console', default_console)
     display_name = game_data.get('display_name', key)
     shadow = game_data.get('shadow', True)
@@ -472,7 +598,39 @@ def process_single_game(args):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Build Game & Watch 3DS assets")
+    parser = argparse.ArgumentParser(description="Build Game & Watch assets")
+    parser.add_argument(
+        "--target",
+        default="3ds",
+        help="Target profile (e.g. '3ds' or 'rgds').",
+    )
+    parser.add_argument(
+        "--out-gfx",
+        default=None,
+        help="Output folder for generated PNG/T3S (default depends on target).",
+    )
+    parser.add_argument(
+        "--out-gw-all",
+        default=None,
+        help="Output GW_ALL header path (default depends on target).",
+    )
+    parser.add_argument(
+        "--out-gw-rom-dir",
+        default=None,
+        help="Output folder for per-game .cpp/.h (default depends on target).",
+    )
+    parser.add_argument(
+        "--export-dpi",
+        type=int,
+        default=None,
+        help="Override Inkscape export DPI (default depends on target).",
+    )
+    parser.add_argument(
+        "--scale",
+        type=int,
+        default=None,
+        help="Override size scale multiplier (default depends on target).",
+    )
     parser.add_argument(
         "--game",
         "-g",
@@ -494,6 +652,15 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+
+    apply_profile(args.target, args.out_gfx, args.out_gw_all, args.out_gw_rom_dir, args.export_dpi, args.scale)
+
+    # Load games_path based on target.
+    games_path = _load_games_path_for_target(args.target)
+    games_path = clean_games_path(games_path)
+
+    os.makedirs(destination_game_file, exist_ok=True)
+    os.makedirs(destination_graphique_file, exist_ok=True)
 
     # Toggle to control processing mode
     USE_PARALLEL_PROCESSING = args.use_parallel  # default False unless --parallel is passed
@@ -517,6 +684,7 @@ if __name__ == "__main__":
 
     # If a specific game was requested, only process that one
     if args.game:
+        args.game = str(args.game).lower()
         if args.game not in games_path:
             print(f"Unknown game '{args.game}'. Available keys:")
             for k in sorted(games_path.keys()):
