@@ -79,14 +79,14 @@ def _load_games_path_for_target(target_name: str) -> dict:
 
     return loaded
 
-def clean_games_path():
-    global games_path
+
+def clean_games_path(games_path):
     tmp_gamepath = {}
     for key in games_path:
         new_key = str(key).lower()
         if(new_key not in tmp_gamepath):
             tmp_gamepath[new_key] = games_path[key]
-    games_path = tmp_gamepath
+    return tmp_gamepath
 
 
 
@@ -597,7 +597,6 @@ def process_single_game(args):
 
 if __name__ == "__main__":
     import argparse
-    clean_games_path()
 
     parser = argparse.ArgumentParser(description="Build Game & Watch assets")
     parser.add_argument(
@@ -658,6 +657,7 @@ if __name__ == "__main__":
 
     # Load games_path based on target.
     games_path = _load_games_path_for_target(args.target)
+    games_path = clean_games_path(games_path)
 
     os.makedirs(destination_game_file, exist_ok=True)
     os.makedirs(destination_graphique_file, exist_ok=True)
