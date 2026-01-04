@@ -49,6 +49,16 @@ Typical usage from this folder:
 python convert_original.py
 ```
 
+Use the `--target` command line to generate the correct settings.
+
+```
+# Original 3DS-sized outputs
+python convert_original.py --target 3ds
+
+# RG DS / 640x480-class: generates higher-res source PNGs + updated metadata
+python convert_original.py --target rgds
+```
+
 If any files are missing, `generate_games_path()` prints details and exits with an error.
 
 ### `convert_3ds.py`
@@ -76,6 +86,22 @@ python convert_3ds.py
 
 # Convert only Crab Grab, and clean away files first
 python convert_3ds.py -c -g Crab_grab
+```
+
+### Targets / screen profiles
+
+The script supports two main targets, 3DS and RG DS scaling the graphics to suit each device.
+The settings for each are now centralized in `CONVERT_ROM/source/target_profiles.py` and selected via `convert_3ds.py --target`.
+
+Common usage:
+
+```powershell
+# Original 3DS-sized outputs
+python convert_3ds.py --target 3ds
+
+# RG DS / 640x480-class: generates higher-res source PNGs + updated metadata
+python convert_3ds.py --target rgds
+
 ```
 
 If you adjust per‑game processors or add new games, re‑run `convert_original.py` first so that `games_path.py` and the processed assets are up to date, then run `convert_3ds.py` again to regenerate the 3DS build data.

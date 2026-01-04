@@ -4,8 +4,8 @@ from source.games_path_utils import GamesPathUpdater
 from source.game_processor import GameProcessor
 
 class CrabGrabGameProcessor(GameProcessor):
-	def __init__(self):
-		super().__init__()
+	def __init__(self, target_name: str = "3ds"):
+		super().__init__(target_name)
 
 		# Specifics for Crab Grab
 		self.game_key = "Crab_Grab" # Key from games_path.py
@@ -19,7 +19,7 @@ class CrabGrabGameProcessor(GameProcessor):
 		self.add_colour_indices()
 
 		# Combine the regular background with the Subtract, Overlay and Frame
-		updater = GamesPathUpdater()
+		updater = GamesPathUpdater(self.target_name)
 		target = updater.get_target(self.game_key)
 		game_folder = target.background_paths[0].parent
 

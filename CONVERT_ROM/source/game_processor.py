@@ -16,6 +16,7 @@ import re
 import copy
 
 from source.games_path_utils import GameEntry, GamesPathUpdater, write_games_path, load_games_path 
+from source.target_profiles import get_target
 
 
 def _get_group_y_position(g_elem: ET.Element) -> Optional[float]:
@@ -40,7 +41,7 @@ def _get_group_y_position(g_elem: ET.Element) -> Optional[float]:
 class GameProcessor:
 	"""Post-processing helper for a single game."""
 
-	def __init__(self) -> None:
+	def __init__(self, target_name: str = "3ds") -> None:
 		# Overrides by subclasses for specific games
 		self.game_key = ""  # Game key from games_path.py	
 		self.game_folder = ""  # Folder name for the game
@@ -57,9 +58,11 @@ class GameProcessor:
 		self.colour_names = {0: "none", 1: "purple", 2: "mint", 3: "coral", 4: "blue"}
 		# Fraction of total height considered as header region for colour index 0
 		self.header_fraction: float = 0.10
+		# Which target profile to use when writing size_visual, etc.
+		self.target_name: str = target_name
 
 	def load_info(self) -> bool:
-		updater = GamesPathUpdater()
+		updater = GamesPathUpdater(self.target_name)
 		target = updater.get_target(self.game_key)
 		if target is None:
 			print(f"Game '{self.game_key}' not found in games_path")
@@ -331,7 +334,7 @@ class GameProcessor:
 	
 	def multiscreen_conversion(self) -> None:
 		"""Placeholder for multiscreen conversion logic for this game."""
-		updater = GamesPathUpdater()
+		updater = GamesPathUpdater(self.target_name)
 		target = updater.get_target(self.game_key)
 
 		if target is None:
@@ -358,7 +361,9 @@ class GameProcessor:
 			target.transform_visual = [original_transform, original_transform]
 
 		# Add the size_visual for multiscreen
-		target.size_visual = [[320,240],[320,240]]
+		profile = get_target(self.target_name)
+		w, h = profile.multiscreen_top_bottom_size
+		target.size_visual = [[w, h], [w, h]]
 
 		try:
 			updater.write(self.script_root)
@@ -487,11 +492,11 @@ class GameProcessor:
 		Raises RuntimeError on failure.
 		"""
 
-		return load_games_path()
+		return load_games_path(self.target_name)
 
 	def _update_games_path_visual(self, out_svg: Path) -> None:
 		"""Replace this game's Visual entry in games_path.py with ``out_svg``"""
-		updater = GamesPathUpdater()
+		updater = GamesPathUpdater(self.target_name)
 
 		# games_path values are relative paths rooted at script_root.
 		# Keep that convention for the new visual path.
