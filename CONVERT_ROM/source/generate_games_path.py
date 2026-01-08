@@ -700,7 +700,11 @@ def generate_games_path(target_name: str | None = None) -> bool:
         )
         print(ref_value)
         # Ball, Fire (2 versions), DK-JR (wide screen)
-        background_in_front = ref_value in ("ac-01", "dj-101", "RC-04", "FR-27")
+        background_in_front = ref_value.lower() in ("ac-01", "mt-03", "rc-04", "mh-06", "cn-01", "ln-08"
+                                                    "pr-21", "oc-22", "pp-23", "fp-24", "mc-25", "eg-26"
+                                                    "fr-27", "sp-30", "dj-101", "ml-102", "nh-103"
+                                                    , "gh-54", "jr-55", "mw-56", "mg-61"
+                                                    , "ak-302", "hk-303")
 
         entry = GameEntry(
             folder_name=name,

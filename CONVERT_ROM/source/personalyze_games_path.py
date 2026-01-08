@@ -36,6 +36,7 @@ games_path = {
                     , "transform_visual" : [[[2329, 145, 184], [1505, 88, 125]]]
                     , "date" : "1980-07-10"
                     , "console" : r'.\rom\decompress\gnw_vermin\gnw_vermin.png'
+                    , "background_in_front" : True                    
                     }
               
             , "Fire" :
@@ -69,6 +70,7 @@ games_path = {
                     , "transform_visual" : [[[2396, 200, 160], [1607, 140, 130]]]
                     , "date" : "1981-01-27"
                     , "console" : r'.\rom\decompress\gnw_manholeg\gnw_manholeg.png'
+                    , "background_in_front" : True 
                     }
               
             , "Helmet" :
@@ -80,6 +82,7 @@ games_path = {
                     , "transform_visual" : [[[1145, 86, 101], [747, 58, 66]]]
                     , "date" : "1981-02-21"
                     , "console" : r'.\rom\decompress\gnw_helmet\gnw_helmet.png'
+                    , "background_in_front" : True 
                     }
               
             , "Lion" :
@@ -91,6 +94,7 @@ games_path = {
                     , "transform_visual" : [[[2361, 146, 179], [1627, 145, 145]]]
                     , "date" : "1981-04-27"
                     , "console" : r'.\rom\decompress\gnw_lion\gnw_lion.png'
+                    , "background_in_front" : True 
                     }
               
             , "Parachute" :
@@ -138,6 +142,7 @@ games_path = {
                     , "transform_visual" : [[[1282, 17, 14], [831, 23, 9]]]
                     , "date" : "1981-09-08"
                     , "console" : r'.\rom\decompress\gnw_chef\gnw_chef.png'
+                    , "background_in_front" : True 
                     }
               
              , "Mickey_Mouse" :
@@ -204,70 +209,71 @@ games_path = {
                     }
               
             , "Snoopy_Tennis" :
-                    { "ref" : "sp-30"
-                    , "display_name" : "Snoopy Tennis"
-                    , "Rom" : r'.\rom\decompress\gnw_stennis\sp-30'
-                    , "Visual" : [r'.\rom\decompress\gnw_stennis\gnw_stennis.svg'] # list of screen visual
-                    , "Background" : [r'.\rom\decompress\gnw_stennis\BackgroundNS.png']
-                    , "transform_visual" : [[[1294, 42, 39], [883, 49, 63]]]
-                    , "date" : "1982-04-28"
-                    , "console" : r'.\rom\decompress\gnw_stennis\gnw_stennis.png'
+                { "ref" : "sp-30"
+                , "display_name" : "Snoopy Tennis"
+                , "Rom" : r'.\rom\decompress\gnw_stennis\sp-30'
+                , "Visual" : [r'.\rom\decompress\gnw_stennis\gnw_stennis.svg'] # list of screen visual
+                , "Background" : [r'.\rom\decompress\gnw_stennis\BackgroundNS.png']
+                , "transform_visual" : [[[1294, 42, 39], [883, 49, 63]]]
+                , "date" : "1982-04-28"
+                , "console" : r'.\rom\decompress\gnw_stennis\gnw_stennis.png'
+                , "background_in_front" : True 
                 }
 
             ,"Oil_Panic" :
-                    { "ref" : "op-51"
-                    , "display_name" : "Oil Panic"
-                    , "date" : "1982-05-28"
-                    , "Rom" : r'.\rom\decompress\gnw_opanic\op-51'
-                    , "Visual" : [r'.\rom\decompress\gnw_opanic\gnw_opanic_top.svg'
-                                    , r'.\rom\decompress\gnw_opanic\gnw_opanic_bottom.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\decompress\gnw_opanic\Screen-TopNS.png'
-                                    , r'.\rom\decompress\gnw_opanic\Screen-BottomNS.png']
-                    , "size_visual" : [resolution_up, [330, 240]]
-                    , "alpha_bright" : 1.2
-                    , "fond_bright" : 1.3
-                    , "transform_visual" : [[[1349, 33, 22], [899, 24, 58]], [[1371, 46, 51], [878, -18, 79]]]
-                    , "console" : r'.\rom\decompress\gnw_opanic\gnw_opanic.png'
+                { "ref" : "op-51"
+                , "display_name" : "Oil Panic"
+                , "date" : "1982-05-28"
+                , "Rom" : r'.\rom\decompress\gnw_opanic\op-51'
+                , "Visual" : [r'.\rom\decompress\gnw_opanic\gnw_opanic_top.svg'
+                                , r'.\rom\decompress\gnw_opanic\gnw_opanic_bottom.svg'] # list of screen visual
+                , "Background" :[r'.\rom\decompress\gnw_opanic\Screen-TopNS.png'
+                                , r'.\rom\decompress\gnw_opanic\Screen-BottomNS.png']
+                , "size_visual" : [resolution_up, [330, 240]]
+                , "alpha_bright" : 1.2
+                , "fond_bright" : 1.3
+                , "transform_visual" : [[[1349, 33, 22], [899, 24, 58]], [[1371, 46, 51], [878, -18, 79]]]
+                , "console" : r'.\rom\decompress\gnw_opanic\gnw_opanic.png'
                 }
               
             ,"Donkey_kong" :
-                    { "ref" : "dk-52"
-                    , "display_name" : "Donkey Kong"
-                    , "date" : "1982-06-03"
-                    , "Rom" : r'.\rom\decompress\gnw_dkong\dk-52'
-                    , "Visual" : [r'.\rom\decompress\gnw_dkong\gnw_dkong_top.svg'
-                                    , r'.\rom\decompress\gnw_dkong\gnw_dkong_bottom.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\decompress\gnw_dkong\Screen-TopNS.png'
-                                    , r'.\rom\decompress\gnw_dkong\Screen-BottomNS.png']
-                    , "size_visual" : [[330, 240], [330, 240]]
-                    , "transform_visual" : [[[1339, 16, 27], [870, 18, 35]], [[1319, 8, 15], [854, 11, 26]]]
-                    , "console" : r'.\rom\decompress\gnw_dkong\gnw_dkong.png'
+                { "ref" : "dk-52"
+                , "display_name" : "Donkey Kong"
+                , "date" : "1982-06-03"
+                , "Rom" : r'.\rom\decompress\gnw_dkong\dk-52'
+                , "Visual" : [r'.\rom\decompress\gnw_dkong\gnw_dkong_top.svg'
+                                , r'.\rom\decompress\gnw_dkong\gnw_dkong_bottom.svg'] # list of screen visual
+                , "Background" :[r'.\rom\decompress\gnw_dkong\Screen-TopNS.png'
+                                , r'.\rom\decompress\gnw_dkong\Screen-BottomNS.png']
+                , "size_visual" : [[330, 240], [330, 240]]
+                , "transform_visual" : [[[1339, 16, 27], [870, 18, 35]], [[1319, 8, 15], [854, 11, 26]]]
+                , "console" : r'.\rom\decompress\gnw_dkong\gnw_dkong.png'
                 }
 
             , "Donkey_Kong_JR" :
-                    { "ref" : "dj-101"
-                    , "display_name" : "Donkey Kong JR"
-                    , "Rom" : r'.\rom\decompress\gnw_dkjr\dj-101'
-                    , "Visual" : [r'.\rom\decompress\gnw_dkjr\gnw_dkjr.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\decompress\gnw_dkjr\BackgroundNS.png']
-                    , "transform_visual" : [[[1216, 1, 6], [798, 5, -5]]]
-                    , "date" : "1982-10-26"
-                    , "console" : r'.\rom\decompress\gnw_dkjr\gnw_dkjr.png'
-                    , "background_in_front" : True
-                    }
+                { "ref" : "dj-101"
+                , "display_name" : "Donkey Kong JR"
+                , "Rom" : r'.\rom\decompress\gnw_dkjr\dj-101'
+                , "Visual" : [r'.\rom\decompress\gnw_dkjr\gnw_dkjr.svg'] # list of screen visual
+                , "Background" :[r'.\rom\decompress\gnw_dkjr\BackgroundNS.png']
+                , "transform_visual" : [[[1216, 1, 6], [798, 5, -5]]]
+                , "date" : "1982-10-26"
+                , "console" : r'.\rom\decompress\gnw_dkjr\gnw_dkjr.png'
+                , "background_in_front" : True
+                }
               
             ,"Mickey_Donald" :
-                    { "ref" : "dm-53"
-                    , "display_name" : "Mickey Donald"
-                    , "date" : "1982-11-12"
-                    , "Rom" : r'.\rom\decompress\gnw_mickdon\dm-53_565'
-                    , "Visual" : [r'.\rom\decompress\gnw_mickdon\gnw_mickdon_top.svg'
-                                    , r'.\rom\decompress\gnw_mickdon\gnw_mickdon_bottom.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\decompress\gnw_mickdon\Screen-TopNS.png'
-                                    , r'.\rom\decompress\gnw_mickdon\Screen-BottomNS.png']
-                    , "size_visual" : [[350, 240], [350, 240]]
-                    , "transform_visual" : [[[1288, -8, 0], [844, 1, 26]], [[1273, -24, 1], [802, 13, -28]]]
-                    , "console" : r'.\rom\decompress\gnw_mickdon\gnw_mickdon.png'
+                { "ref" : "dm-53"
+                , "display_name" : "Mickey Donald"
+                , "date" : "1982-11-12"
+                , "Rom" : r'.\rom\decompress\gnw_mickdon\dm-53_565'
+                , "Visual" : [r'.\rom\decompress\gnw_mickdon\gnw_mickdon_top.svg'
+                                , r'.\rom\decompress\gnw_mickdon\gnw_mickdon_bottom.svg'] # list of screen visual
+                , "Background" :[r'.\rom\decompress\gnw_mickdon\Screen-TopNS.png'
+                                , r'.\rom\decompress\gnw_mickdon\Screen-BottomNS.png']
+                , "size_visual" : [[350, 240], [350, 240]]
+                , "transform_visual" : [[[1288, -8, 0], [844, 1, 26]], [[1273, -24, 1], [802, 13, -28]]]
+                , "console" : r'.\rom\decompress\gnw_mickdon\gnw_mickdon.png'
                 }
               
             ,"Green_House" :
@@ -286,34 +292,35 @@ games_path = {
                 }
 
             ,"Donkey_Kong_2" :
-                    { "ref" : "jr-55"
-                    , "display_name" : "Donkey Kong 2"
-                    , "date" : "1983-03-07"
-                    , "Rom" : r'.\rom\decompress\gnw_dkong2\jr-55_560'
-                    , "Visual" : [r'.\rom\decompress\gnw_dkong2\gnw_dkong2_top.svg'
-                                    , r'.\rom\decompress\gnw_dkong2\gnw_dkong2_bottom.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\decompress\gnw_dkong2\Screen-TopNS.png'
-                                    , r'.\rom\decompress\gnw_dkong2\Screen-BottomNS.png']
-                    , "size_visual" : [[344, 240], [344, 240]]
-                    , "transform_visual" : [[[1319, 0, 23], [827, 15, -5]], [[1314, 8, 10], [825, 3, 5]]]
-                    , "console" : r'.\rom\decompress\gnw_dkong2\gnw_dkong2.png'
+                { "ref" : "jr-55"
+                , "display_name" : "Donkey Kong 2"
+                , "date" : "1983-03-07"
+                , "Rom" : r'.\rom\decompress\gnw_dkong2\jr-55_560'
+                , "Visual" : [r'.\rom\decompress\gnw_dkong2\gnw_dkong2_top.svg'
+                                , r'.\rom\decompress\gnw_dkong2\gnw_dkong2_bottom.svg'] # list of screen visual
+                , "Background" :[r'.\rom\decompress\gnw_dkong2\Screen-TopNS.png'
+                                , r'.\rom\decompress\gnw_dkong2\Screen-BottomNS.png']
+                , "size_visual" : [[344, 240], [344, 240]]
+                , "transform_visual" : [[[1319, 0, 23], [827, 15, -5]], [[1314, 8, 10], [825, 3, 5]]]
+                , "console" : r'.\rom\decompress\gnw_dkong2\gnw_dkong2.png'
+                , "background_in_front" : True 
                 }
               
             ,"Mario_Bros" :
-                    { "ref" : "mw-56"
-                    , "display_name" : "Mario Bros"
-                    , "date" : "1983-03-14"
-                    , "Rom" : r'.\rom\decompress\gnw_mario\mw-56'
-                    , "Visual" : [r'.\rom\decompress\gnw_mario\rework\gnw_mario_left.svg'
-                                    , r'.\rom\decompress\gnw_mario\rework\gnw_mario_right.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\decompress\gnw_mario\rework\Screen-LeftNS.png'
-                                    , r'.\rom\decompress\gnw_mario\rework\Screen-RightNS.png']
-                    , "size_visual" : [[234, 240], [234, 240]]
-                    , "2_in_one_screen" : True
-                    , "shadow" : False
-                    , "transform_visual" : [[[1248, 17, 17], [782, 6, 0]], [[1217, 1, 2], [785, 3+10, 6-10]]]
-                    , "console" : r'.\rom\decompress\gnw_mario\Backdrop_2.png'
-                    , "background_in_front" : True
+                { "ref" : "mw-56"
+                , "display_name" : "Mario Bros"
+                , "date" : "1983-03-14"
+                , "Rom" : r'.\rom\decompress\gnw_mario\mw-56'
+                , "Visual" : [r'.\rom\decompress\gnw_mario\rework\gnw_mario_left.svg'
+                                , r'.\rom\decompress\gnw_mario\rework\gnw_mario_right.svg'] # list of screen visual
+                , "Background" :[r'.\rom\decompress\gnw_mario\rework\Screen-LeftNS.png'
+                                , r'.\rom\decompress\gnw_mario\rework\Screen-RightNS.png']
+                , "size_visual" : [[234, 240], [234, 240]]
+                , "2_in_one_screen" : True
+                , "shadow" : False
+                , "transform_visual" : [[[1248, 17, 17], [782, 6, 0]], [[1217, 1, 2], [785, 3+10, 6-10]]]
+                , "console" : r'.\rom\decompress\gnw_mario\Backdrop_2.png'
+                , "background_in_front" : True
                 }
               
             , "Mario_Cement_Factory_panorama" :
@@ -330,57 +337,58 @@ games_path = {
                 }
               
             , "Mario_Cement_Factory" :
-                    { "ref" : "ml-102"
-                    , "display_name" : "Mario Cement Factory"
-                    , "Rom" : r'.\rom\decompress\gnw_mariocm\ml-102_577'
-                    , "Visual" : [r'.\rom\decompress\gnw_mariocm\gnw_mariocm.svg'] # list of screen visual
-                    , "Background" : [r'.\rom\decompress\gnw_mariocm\BackgroundNS.png']
-                    , "transform_visual" : [[[1227, 8, 3], [816, 25, -7]]]
-                    , "date" : "1983-06-16"
-                    , "console" : r'.\rom\decompress\gnw_mariocm\gnw_mariocm.png'
-                    , "background_in_front" : True
+                { "ref" : "ml-102"
+                , "display_name" : "Mario Cement Factory"
+                , "Rom" : r'.\rom\decompress\gnw_mariocm\ml-102_577'
+                , "Visual" : [r'.\rom\decompress\gnw_mariocm\gnw_mariocm.svg'] # list of screen visual
+                , "Background" : [r'.\rom\decompress\gnw_mariocm\BackgroundNS.png']
+                , "transform_visual" : [[[1227, 8, 3], [816, 25, -7]]]
+                , "date" : "1983-06-16"
+                , "console" : r'.\rom\decompress\gnw_mariocm\gnw_mariocm.png'
+                , "background_in_front" : True
                 }
 
             ,"Rain_Shower" :
-                    { "ref" : "lp-57"
-                    , "display_name" : "Rain Shower"
-                    , "date" : "1983-08-10"
-                    , "Rom" : r'.\rom\decompress\gnw_rshower\lp-57'
-                    , "Visual" : [r'.\rom\decompress\gnw_rshower\gnw_rshower_left.svg'
-                                    , r'.\rom\decompress\gnw_rshower\gnw_rshower_right.svg'] # list of screen visual
-                    , "Background" :[r'.\rom\decompress\gnw_rshower\Screen-LeftNS.png'
-                                    , r'.\rom\decompress\gnw_rshower\Screen-RightNS.png']
-                    , "size_visual" : [[200, 240], [200, 240]]
-                    , "2_in_one_screen" : True
-                    , "shadow" : False
-                    , "alpha_bright" : 1.3
-                    , "fond_bright" : 1.3
-                    , "transform_visual" : [[[1280, 19, 47], [855, 47, 19]], [[1300, 48, 38], [853, 65, 12]]]
-                    , "console" : r'.\rom\decompress\gnw_rshower\gnw_rshower.png'
+                { "ref" : "lp-57"
+                , "display_name" : "Rain Shower"
+                , "date" : "1983-08-10"
+                , "Rom" : r'.\rom\decompress\gnw_rshower\lp-57'
+                , "Visual" : [r'.\rom\decompress\gnw_rshower\gnw_rshower_left.svg'
+                                , r'.\rom\decompress\gnw_rshower\gnw_rshower_right.svg'] # list of screen visual
+                , "Background" :[r'.\rom\decompress\gnw_rshower\Screen-LeftNS.png'
+                                , r'.\rom\decompress\gnw_rshower\Screen-RightNS.png']
+                , "size_visual" : [[200, 240], [200, 240]]
+                , "2_in_one_screen" : True
+                , "shadow" : False
+                , "alpha_bright" : 1.3
+                , "fond_bright" : 1.3
+                , "transform_visual" : [[[1280, 19, 47], [855, 47, 19]], [[1300, 48, 38], [853, 65, 12]]]
+                , "console" : r'.\rom\decompress\gnw_rshower\gnw_rshower.png'
                 }
               
             , "Manhole_wide_screen" :
-                    { "ref" : "NH_103"
-                    , "display_name" : "Manhole"
-                    , "Rom" : r'.\rom\decompress\gnw_manhole\nh-103'
-                    , "Visual" : [r'.\rom\decompress\gnw_manhole\gnw_manhole.svg'] # list of screen visual
-                    , "Background" : [r'.\rom\decompress\gnw_manhole\BackgroundNS.png']
-                    , "transform_visual" : [[[1290, 37, 36], [900, 56, 45]]]
-                    , "date" : "1983-08-24"
-                    , "console" : r'.\rom\decompress\gnw_manhole\gnw_manhole.png'
+                { "ref" : "NH_103"
+                , "display_name" : "Manhole"
+                , "Rom" : r'.\rom\decompress\gnw_manhole\nh-103'
+                , "Visual" : [r'.\rom\decompress\gnw_manhole\gnw_manhole.svg'] # list of screen visual
+                , "Background" : [r'.\rom\decompress\gnw_manhole\BackgroundNS.png']
+                , "transform_visual" : [[[1290, 37, 36], [900, 56, 45]]]
+                , "date" : "1983-08-24"
+                , "console" : r'.\rom\decompress\gnw_manhole\gnw_manhole.png'
+                , "background_in_front" : True 
                 }
               
             , "Snoopy_Table_Top" :
-                    { "ref" : "sm-91"
-                    , "display_name" : "Snoopy"
-                    , "date" : "1983-08-30"
-                    , "Rom" : r'.\rom\decompress\gnw_snoopyp\sm-91.program'
-                    , "Visual" : [r'.\rom\decompress\gnw_snoopyp\gnw_snoopyp.svg'] # list of screen visual
-                    , "Melody_Rom" : r'.\rom\decompress\gnw_snoopyp\sm-91.melody'
-                    , "Background" : [r'.\rom\decompress\gnw_snoopyp\Background.png']
-                    , "mask" : True
-                    , "transform_visual" : [[[1328, 0, 0], [703, -9, -9]]]
-                    , "console" : r'.\rom\decompress\gnw_snoopyp\gnw_snoopyp.png'
+                { "ref" : "sm-91"
+                , "display_name" : "Snoopy"
+                , "date" : "1983-08-30"
+                , "Rom" : r'.\rom\decompress\gnw_snoopyp\sm-91.program'
+                , "Visual" : [r'.\rom\decompress\gnw_snoopyp\gnw_snoopyp.svg'] # list of screen visual
+                , "Melody_Rom" : r'.\rom\decompress\gnw_snoopyp\sm-91.melody'
+                , "Background" : [r'.\rom\decompress\gnw_snoopyp\Background.png']
+                , "mask" : True
+                , "transform_visual" : [[[1328, 0, 0], [703, -9, -9]]]
+                , "console" : r'.\rom\decompress\gnw_snoopyp\gnw_snoopyp.png'
                 }
 
             , "Popeye_Table_Top" :
@@ -466,7 +474,6 @@ games_path = {
                     , "size_visual" : [[326, 240], [326, 240]]
                     , "transform_visual" : [[[1425, 64, 65], [928, 31, 80]], [[1438, 71, 71], [955, 31, 108]]]
                     , "console" : r'.\rom\decompress\gnw_pinball\gnw_pinball.png'
-                    , "background_in_front" : True
                 }
               
             , "Mickey_Mouse_panorama" :
@@ -516,7 +523,6 @@ games_path = {
                     , "fond_bright" : 1.3
                     , "transform_visual" : [[[1003, -32, -34], [864-10, -16+10, 0]], [[1003, -32, -34], [864-10, 0, -17+10]]]
                     , "console" : r'.\rom\decompress\gnw_ssparky\gnw_ssparky.png'
-                    , "background_in_front" : True
             }
               
              , "boxing" :
@@ -541,6 +547,7 @@ games_path = {
                     , "Background" :[r'.\rom\decompress\gnw_dkong3\BackgroundNS.png']
                     , "transform_visual" : [[[2400, 36, 17], [724, -22, 16]]]
                     , "console" : r'.\rom\decompress\gnw_dkong3\gnw_dkong3.png'
+                    , "background_in_front" : True 
             }
             
             , "Donkey_Kong_hockey" :
@@ -553,6 +560,7 @@ games_path = {
                     , "Background" :[r'.\rom\decompress\gnw_dkhockey\BackgroundNS.png']
                     , "transform_visual" : [[[2460, 65, 48], [800, 40, 30]]]
                     , "console" : r'.\rom\decompress\gnw_dkhockey\gnw_dkhockey.png'
+                    , "background_in_front" : True 
                 }
                            
             ,"black_jack" :

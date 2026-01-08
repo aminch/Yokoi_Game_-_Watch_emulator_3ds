@@ -78,6 +78,11 @@ class Virtual_Screen {
         float slider_3d;
         float eye_offset_value;
 
+        float offset_segment;
+        float offset_mark_segment;
+        float offset_background;
+        float offset_fond;
+
         uint32_t index_start_texte;
         uint32_t size_text_screen_0;
         uint32_t size_text_screen_1;
@@ -124,7 +129,19 @@ class Virtual_Screen {
   
         void modif_slider_3d_value(int nb_render);
         void modif_eye_offset_value(int nb_render, int i_render);
+        void update_offset_fond();
+        void update_offset_background();
+        void update_offset_segment();
+
         float get_eye_offset_segment(int nb_render, int i_render, bool is_active);
-        float get_eye_offset_background(int nb_render, int i_render);
-        void eye_lower_fond(C3D_Mtx* curr_modelView, int nb_render, int i_render, float zoom);
+        void apply_3d_segment(C3D_Mtx* curr_modelView, int i_render, bool is_active);
+        void apply_3d_background(C3D_Mtx* curr_modelView, int i_render);
+        void apply_3d_fond(C3D_Mtx* curr_modelView, int i_render, float zoom);
+
+        void create_fond(int nb_render, int i_render, int curr_screen);
+        void create_shadow(int nb_render, int i_render, int curr_screen);
+        void create_segment(int nb_render, int i_render, int curr_screen);
+        void create_background(int nb_render, int i_render, int curr_screen);
+        void create_border(int nb_render, int i_render, int curr_screen);
+
 };

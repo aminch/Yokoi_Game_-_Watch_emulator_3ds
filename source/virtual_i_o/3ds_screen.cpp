@@ -11,9 +11,10 @@
 constexpr uint16_t _3DS_SCREEN_X[2] = { 400, 320 };
 constexpr uint16_t _3DS_SCREEN_Y[2] = { 240, 240 };
 
-constexpr float _LUM_DARK_FOND_NOISE_ = 0.90f;//0.88f;
-constexpr float _LUM_LIGHT_FOND_NOISE_ = 2.4f; //1.58f;//1.2f;
-constexpr float _ZOOM_SHADOW_ = 0.01f;//0.02f;
+constexpr float _LUM_DARK_FOND_NOISE_ = 0.9f; //0.92f; //0.92f;//0.96f;//0.96f;
+constexpr float _LUM_LIGHT_FOND_NOISE_ = 1.5f; //1.58f;//1.2f;
+constexpr float _ZOOM_SHADOW_ = 0.014f;//0.02f;
+constexpr float _COEF_MOVE_SHADOW_ = 0.7f;
 
 
 
@@ -398,6 +399,7 @@ bool Virtual_Screen::init_visual(){
         if(curr_index >= nb_segments_max*6){ break; }
     }
 
+
     send_vbo();
     return true;
 }
@@ -565,54 +567,299 @@ void Virtual_Screen::modif_eye_offset_value(int nb_render, int i_render){
     //eye_offset_value = is_mask ? -eye_offset_value : eye_offset_value;
 } 
 
-float Virtual_Screen::get_eye_offset_segment(int nb_render, int i_render, bool is_active){
-    if(eye_offset_value == 0){ return 0; }
+
+
+void Virtual_Screen::update_offset_fond(){
+    if(eye_offset_value != 0 && !is_mask){
+        float coef_bg_in_front = -4.5f; //1.65f: 0.8f;
+        offset_fond = eye_offset_value * coef_bg_in_front;
+    }
+    else { offset_fond = 0; }
+}
+
+
+void Virtual_Screen::update_offset_segment(){
+    if(eye_offset_value == 0){ 
+        offset_segment = 0;
+        offset_mark_segment = 0;
+        return;
+    }
 
     float coef_bg_in_front ;
     if(is_mask){ 
-        coef_bg_in_front = -3.0f;
+        coef_bg_in_front = -3.0f; 
     }
     else {
-        coef_bg_in_front = background_info[i_bg_in_front(nb_screen)] == 1 ? -3.0f: 1.0f; //1.35f: 1.65f;
-        coef_bg_in_front = is_active ? coef_bg_in_front : coef_bg_in_front-1.0f;
+        coef_bg_in_front = background_info[i_bg_in_front(nb_screen)] == 1 ? -3.0f: 1.0f;
     }
-
-    float round_better = (i_render == 0 ? 0 : -0.5f);
-    float result = round_better + eye_offset_value * coef_bg_in_front;
-    return (int)result; // only round part
+    offset_segment = eye_offset_value * coef_bg_in_front;
+    offset_mark_segment = eye_offset_value * (coef_bg_in_front-1.0f);
 }
 
-float Virtual_Screen::get_eye_offset_background(int nb_render, int i_render){
-    if(eye_offset_value == 0){ return 0; }
-    
-    float round_better = (i_render == 0 ? 0 : -0.5f);
+void Virtual_Screen::update_offset_background(){
+    if(eye_offset_value == 0){ 
+        offset_background = 0; return; }
+
     float coef_bg_in_front = background_info[i_bg_in_front(nb_screen)] == 1 ? 0.0f: -3.0f; //1.65f: 0.8f;
-
-    float result = round_better + eye_offset_value * coef_bg_in_front;
-    return (int)result; // only round part
+    offset_background = eye_offset_value * coef_bg_in_front;
 }
 
 
-void Virtual_Screen::eye_lower_fond(C3D_Mtx* curr_modelView, int nb_render, int i_render, float zoom){
-    if(eye_offset_value != 0 && !is_mask){
+void Virtual_Screen::apply_3d_segment(C3D_Mtx* curr_modelView, int i_render, bool is_active){
+    if(offset_segment == 0){ return; }
+
+    float round_better = (i_render == 0 ? 0 : -0.5f);
+    float result = round_better + (is_active) ? offset_segment: offset_mark_segment;
+
+    Mtx_Translate(curr_modelView, (int)(result), 0, 0, true);
+}
+
+
+void Virtual_Screen::apply_3d_background(C3D_Mtx* curr_modelView, int i_render){
+    if(offset_background == 0){ return; }
+    float round_better = (i_render == 0 ? 0 : -0.5f);
+    Mtx_Translate(curr_modelView, (int)(offset_background + round_better), 0, 0, true);
+}
+
+
+void Virtual_Screen::apply_3d_fond(C3D_Mtx* curr_modelView, int i_render, float zoom){
+    if(offset_fond != 0 && !is_mask){
         float val_move = slider_3d*zoom;
-        Mtx_Translate(curr_modelView, 200, 120, 0, true);
+        Mtx_Translate(curr_modelView, _3DS_SCREEN_X[0]*0.5f, _3DS_SCREEN_Y[0]*0.5f, 0, true);
         Mtx_Scale(curr_modelView, 1 - val_move, double_in_one_screen ? 1 : 1 - val_move, 1);
-        Mtx_Translate(curr_modelView, -200, -120, 0, true);
+        Mtx_Translate(curr_modelView, -_3DS_SCREEN_X[0]*0.5f, -_3DS_SCREEN_Y[0]*0.5f, 0, true);
         
         float round_better = (i_render == 0 ? 0 : -0.5f);
-        float coef_bg_in_front = -4.0f; //1.65f: 0.8f;
-        float result = round_better + eye_offset_value * coef_bg_in_front;
-        Mtx_Translate(curr_modelView, result, 0, 0, true);
+        Mtx_Translate(curr_modelView, (int)(offset_fond + round_better), 0, 0, true);
     }
 }
+
+
+
+void Virtual_Screen::create_fond(int nb_render, int i_render, int curr_screen){
+    C3D_Mtx modelView_tmp;
+
+    ////// Generate fond Color /////////////////////////////////////
+    Mtx_Copy(&modelView_tmp, modelView_curr);
+    apply_3d_fond(&modelView_tmp, i_render, -0.08f);
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+    set_color_environnement( (slider_3d == 0) ? curr_fond_color: curr_fond_color_noise);
+    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+
+    if(slider_3d != 0){ 
+        // make two polygone -> fond with lower color and other with fond color.
+        // Second polygone hav some "hole" for see lower color of other polygone
+        // Usefull for 3d because uniform fond is complex to see in 3d
+        set_alpha_environnement();
+        change_alpha_color_environnement(curr_fond_color);
+        C3D_TexBind(0, &noise_texture); // load texture
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+    }
+}
+
+
+void Virtual_Screen::create_shadow(int nb_render, int i_render, int curr_screen){
+    C3D_Mtx modelView_tmp;
+    int decal = 0;
+    int default_decal = 2;
+
+    set_alpha_environnement();
+
+    // Shadow Segment
+    C3D_TexBind(0, &texture_game); // load texture
+    change_alpha_color_environnement(0x111111, offset_segment == 0 ? 0x18 : 0x24);
+
+    default_decal = (offset_fond != 0) ? 3 : ((background_info[i_bg_in_front(nb_screen)] == 1) ? 2: 3) ;
+
+    decal = offset_segment - offset_fond;
+    decal = (decal < 0) ? -decal : decal;
+    decal = (int)(decal * _COEF_MOVE_SHADOW_);
+
+    Mtx_Copy(&modelView_tmp, modelView_curr); // get current space of 3d model (Transformation Matrix)
+    apply_3d_fond(&modelView_tmp, i_render, _ZOOM_SHADOW_);
+    Mtx_Translate(&modelView_tmp, default_decal+decal, default_decal+decal, -0.20f, true); // Translate all model along x, y axis (and a little z)
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp); // transfert Transformation Matrix to gpu (to vertex shader)
+    
+    for(size_t i = index_segment_screen[curr_screen*2]; i < index_segment_screen[curr_screen*2+1]; i++){
+        Segment seg_gw = list_segment[i];
+        if(seg_gw.buffer_state){ C3D_DrawArrays(GPU_TRIANGLES, seg_gw.index_vertex, 6); }
+    }
+
+
+    // Shadow Background
+    if(img_background && background_info[i_bg_shadow(nb_screen)] == 1){ 
+        C3D_TexBind(0, &background);
+        change_alpha_color_environnement(0x000000, 0x24);
+
+        default_decal = (eye_offset_value != 0) ? 3 : ((background_info[i_bg_in_front(nb_screen)] == 1) ? 3: 2);
+
+        decal = offset_background - offset_fond;
+        decal = (decal < 0) ? -decal : decal;
+        decal = (int)(decal * _COEF_MOVE_SHADOW_);
+
+        Mtx_Copy(&modelView_tmp, modelView_curr);
+        apply_3d_fond(&modelView_tmp, i_render, _ZOOM_SHADOW_);
+        Mtx_Translate(&modelView_tmp, default_decal+decal, default_decal+decal, -0.10f, true);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[nb_screen+curr_screen], 6);
+    }
+
+    /*
+    // Shadow border
+    if(eye_offset_value != 0 && !double_in_one_screen && !is_mask){
+        C3D_TexBind(0, &noise_texture);
+        change_alpha_color_environnement(0x000000, 0x24);
+        
+        default_decal = (eye_offset_value != 0) ? 2 : 3;
+
+        decal = offset_fond;
+        decal = (decal < 0) ? -decal : decal;
+        decal = (int)(decal * _COEF_MOVE_SHADOW_);
+        
+        // Constante for shadow of fond
+        float shadow_sr_w_fix = background_info[i_bg_w(curr_screen)];
+        bool need = true;
+        if(shadow_sr_w_fix > _3DS_SCREEN_X[curr_screen]){
+            shadow_sr_w_fix = (int)(_3DS_SCREEN_X[curr_screen] + 0.5f*(shadow_sr_w_fix - _3DS_SCREEN_X[curr_screen])+0.5f);
+            need = false;
+        }
+
+        float shadow_sr_h_fix = background_info[i_bg_h(curr_screen)];
+        if(shadow_sr_h_fix > _3DS_SCREEN_Y[curr_screen]){
+            shadow_sr_h_fix = (int)(_3DS_SCREEN_Y[curr_screen] + 0.5f*(shadow_sr_h_fix - _3DS_SCREEN_Y[curr_screen])+0.5f);
+            need = false;
+        }
+
+        Mtx_Copy(&modelView_tmp, modelView_curr);
+        apply_3d_fond(&modelView_tmp, i_render, 0);
+        Mtx_Translate(&modelView_tmp, default_decal+decal-shadow_sr_w_fix
+                                    , default_decal+decal-shadow_sr_h_fix
+                                    , -0.10f, true);
+        
+        if(need){
+            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+            C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+        }                  
+
+        Mtx_Translate(&modelView_tmp, shadow_sr_w_fix, 0, 0, true);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+
+        Mtx_Translate(&modelView_tmp, -shadow_sr_w_fix, shadow_sr_h_fix, 0, true);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+    }
+    */
+}
+
+
+
+void Virtual_Screen::create_segment(int nb_render, int i_render, int curr_screen){
+    C3D_Mtx modelView_tmp;
+
+    // Color Segment
+    if(!is_mask){ set_alpha_environnement(); } // no mask segment = classic game watch -> set a color
+    else { set_base_environnement(); } // mask segment = panorama screen and table top -> sprite has aready color
+
+    C3D_TexBind(0, &texture_game); // load texture
+
+    // only for Classic segment of Game & Watch (standars Game watch, not panorama screen or table top)
+    if(!is_mask){ 
+        // slight segment marking effect 
+        Mtx_Copy(&modelView_tmp, modelView_curr); // get current space of 3d model (Transformation Matrix)
+        apply_3d_segment(&modelView_tmp, i_render, false);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+        change_alpha_color_environnement(0x101010, g_settings.segment_marking_alpha);
+        C3D_DrawArrays(GPU_TRIANGLES
+                        , list_segment[index_segment_screen[curr_screen*2]].index_vertex
+                        , 6*(index_segment_screen[curr_screen*2+1]-index_segment_screen[curr_screen*2])); 
+    }
+
+    //   -> modify matrix for 3d effect
+    Mtx_Copy(&modelView_tmp, modelView_curr); 
+    apply_3d_segment(&modelView_tmp, i_render, true);
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+    // create true segment
+    for(size_t i = index_segment_screen[curr_screen*2]; i < index_segment_screen[curr_screen*2+1]; i++){
+        Segment seg_gw = list_segment[i];
+        if(seg_gw.buffer_state){ // segment is activ / visible
+            change_alpha_color_environnement(SEGMENT_COLOR[seg_gw.color_index]); // function already check if necessary, useful for Crab and spitball
+            C3D_DrawArrays(GPU_TRIANGLES, seg_gw.index_vertex, 6); 
+        }
+    }
+}
+
+
+void Virtual_Screen::create_background(int nb_render, int i_render, int curr_screen){
+    C3D_Mtx modelView_tmp;
+    if(img_background){ 
+        C3D_TexBind(0, &background);
+        set_base_environnement();
+
+        Mtx_Copy(&modelView_tmp, modelView_curr); 
+        apply_3d_background(&modelView_tmp, i_render);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[nb_screen+curr_screen], 6);
+    }
+}
+
+void Virtual_Screen::create_border(int nb_render, int i_render, int curr_screen){
+    C3D_Mtx modelView_tmp;
+     
+    if(slider_3d != 0){
+        // Create black mask around color fond
+        set_color_environnement(0x000000);
+
+        // Up - > in two part
+        Mtx_Copy(&modelView_tmp, modelView_curr);
+        Mtx_Translate(&modelView_tmp, (background_info[i_bg_w(curr_screen)]*0.5f)-10, -background_info[i_bg_h(curr_screen)], 0, true);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+
+        Mtx_Translate(&modelView_tmp, -(background_info[i_bg_w(curr_screen)]-20), 0, 0, true);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+
+        // down - > in two part
+        set_color_environnement(0x000000);                
+        Mtx_Translate(&modelView_tmp, 0, 2*background_info[i_bg_h(curr_screen)], 0, true);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+        
+        Mtx_Translate(&modelView_tmp, background_info[i_bg_w(curr_screen)]-20, 0, 0, true);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+        C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+        
+        // Left and Right
+        if(!double_in_one_screen){
+            int compense_background = 0;
+            if(offset_background != 0){
+                compense_background = (int)(offset_background);
+                if(compense_background < 0){ compense_background = -compense_background; }
+                compense_background = compense_background;
+            }
+            set_color_environnement(0x000000);                
+            Mtx_Copy(&modelView_tmp, modelView_curr);
+            Mtx_Translate(&modelView_tmp, -background_info[i_bg_w(curr_screen)]+compense_background, 0, 0, true);
+            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+            C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
+
+            Mtx_Copy(&modelView_tmp, modelView_curr);
+            Mtx_Translate(&modelView_tmp, background_info[i_bg_w(curr_screen)]-compense_background, 0, 0, true);
+            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
+            C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);                
+        }
+    }
+}
+
+
+
 
 
 void Virtual_Screen::update_screen(){
-    C3D_Mtx modelView_tmp;
     int nb_render_to_make = 1; 
-    float eye_offset = 0;
-
     
     for(int curr_screen = 0; curr_screen < nb_screen; curr_screen++){
 
@@ -625,6 +872,9 @@ void Virtual_Screen::update_screen(){
         for(int i_render = 0; i_render < nb_render_to_make; i_render++){
 
             modif_eye_offset_value(nb_render_to_make, i_render);
+            update_offset_fond();
+            update_offset_segment();
+            update_offset_background();
 
             // Paralax effect -> choose what screen up need
             if(curr_screen == 0 || double_in_one_screen){
@@ -632,132 +882,11 @@ void Virtual_Screen::update_screen(){
                 else { set_screen_up(false);  } // right eye
             }
 
-
-            ////// Generate environnement Color /////////////////////////////////////
-            Mtx_Copy(&modelView_tmp, modelView_curr);
-            eye_lower_fond(&modelView_tmp, nb_render_to_make, i_render, -0.08f);
-            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-            set_color_environnement( (slider_3d == 0) ? curr_fond_color: curr_fond_color_noise);
-            C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
-
-            if(slider_3d != 0){
-                set_alpha_environnement();
-                change_alpha_color_environnement(curr_fond_color);
-                C3D_TexBind(0, &noise_texture); // load texture
-                C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
-            }
-
-
-            ////// Generate BackGround //////////////////////////////////////////////
-            if(img_background){ 
-                C3D_TexBind(0, &background);
-                if(background_info[i_bg_shadow(nb_screen)] == 1){
-                    // shadow 
-                    Mtx_Copy(&modelView_tmp, modelView_curr);
-                    Mtx_Translate(&modelView_tmp, 3, 3, -0.10f, true);
-                    eye_lower_fond(&modelView_tmp, nb_render_to_make, i_render, _ZOOM_SHADOW_);
-                    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                    set_alpha_environnement();
-                    change_alpha_color_environnement(0x000000, 0x24);
-                    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[nb_screen+curr_screen], 6);
-                }
-                //   -> modify matrix for 3d effect
-                eye_offset = get_eye_offset_background(nb_render_to_make, i_render);
-                Mtx_Copy(&modelView_tmp, modelView_curr); 
-                Mtx_Translate(&modelView_tmp, eye_offset, 0, 0, true);
-                C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                // true_decors 
-                set_base_environnement();
-                C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[nb_screen+curr_screen], 6);
-            }
-
-            ////// Generate Segment //////////////////////////////////////////////
-
-            // Color Segment
-            if(!is_mask){ set_alpha_environnement(); } // no mask segment = classic game watch -> set a color
-            else { set_base_environnement(); } // mask segment = panorama screen and table top -> sprite has aready color
-
-            C3D_TexBind(0, &texture_game); // load texture
-
-            // only for Classic segment of Game & Watch (standars Game watch, not panorama screen or table top)
-            if(!is_mask){ 
-                // slight segment marking effect 
-                eye_offset = get_eye_offset_segment(nb_render_to_make, i_render, false);
-                Mtx_Copy(&modelView_tmp, modelView_curr); // get current space of 3d model (Transformation Matrix)
-                Mtx_Translate(&modelView_tmp, eye_offset, 0, -0.40f, true); // Translate all model along Z axis (move it further back)
-
-                C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                change_alpha_color_environnement(0x101010, g_settings.segment_marking_alpha);
-                C3D_DrawArrays(GPU_TRIANGLES
-                                , list_segment[index_segment_screen[curr_screen*2]].index_vertex
-                                , 6*(index_segment_screen[curr_screen*2+1]-index_segment_screen[curr_screen*2])); 
-
-                // shadow effect
-                Mtx_Copy(&modelView_tmp, modelView_curr); // get current space of 3d model (Transformation Matrix)
-                Mtx_Translate(&modelView_tmp, 2, 2, -0.20f, true); // Translate all model along x, y axis (and a little z)
-                eye_lower_fond(&modelView_tmp, nb_render_to_make, i_render, _ZOOM_SHADOW_);
-                C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp); // transfert Transformation Matrix to gpu (to vertex shader)
-                change_alpha_color_environnement(0x111111, eye_offset == 0 ? 0x18 : 0x24);
-                for(size_t i = index_segment_screen[curr_screen*2]; i < index_segment_screen[curr_screen*2+1]; i++){
-                    Segment seg_gw = list_segment[i];
-                    if(seg_gw.buffer_state){ C3D_DrawArrays(GPU_TRIANGLES, seg_gw.index_vertex, 6); }
-                }
-            }
-
-            //   -> modify matrix for 3d effect
-            eye_offset = get_eye_offset_segment(nb_render_to_make, i_render, true);
-            Mtx_Copy(&modelView_tmp, modelView_curr); 
-            Mtx_Translate(&modelView_tmp, eye_offset, 0, 0, true);
-            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-            // create true segment
-            for(size_t i = index_segment_screen[curr_screen*2]; i < index_segment_screen[curr_screen*2+1]; i++){
-                Segment seg_gw = list_segment[i];
-                if(seg_gw.buffer_state){ // segment is activ / visible
-                    change_alpha_color_environnement(SEGMENT_COLOR[seg_gw.color_index]); // function already check if necessary, useful for Crab and spitball
-                    C3D_DrawArrays(GPU_TRIANGLES, seg_gw.index_vertex, 6); 
-                }
-            }
-
-
-            
-            if(slider_3d != 0 || true){
-                // Create black mask around color fond
-                set_color_environnement(0x000000);
-
-                if(pos_fond[curr_screen*2+1] != 0){
-                    // Up - > in two part
-                    Mtx_Copy(&modelView_tmp, modelView_curr);
-                    Mtx_Translate(&modelView_tmp, (background_info[i_bg_w(curr_screen)]*0.5f)-10, -background_info[i_bg_h(curr_screen)], 0, true);
-                    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
-                    Mtx_Translate(&modelView_tmp, -(background_info[i_bg_w(curr_screen)]-20), 0, 0, true);
-                    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
-
-                    // down - > in two part
-                    Mtx_Translate(&modelView_tmp, 0, 2*background_info[i_bg_h(curr_screen)], 0, true);
-                    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
-                    Mtx_Translate(&modelView_tmp, background_info[i_bg_w(curr_screen)]-20, 0, 0, true);
-                    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
-
-                }
-                
-                
-                if(!double_in_one_screen){
-                    Mtx_Copy(&modelView_tmp, modelView_curr);
-                    Mtx_Translate(&modelView_tmp, -background_info[i_bg_w(curr_screen)], 0, 0, true);
-                    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);
-
-                    Mtx_Copy(&modelView_tmp, modelView_curr);
-                    Mtx_Translate(&modelView_tmp, background_info[i_bg_w(curr_screen)], 0, 0, true);
-                    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &modelView_tmp);
-                    C3D_DrawArrays(GPU_TRIANGLES, background_ind_vertex[curr_screen], 6);                
-                }
-            }
-
+            create_fond(nb_render_to_make, i_render, curr_screen);
+            create_shadow(nb_render_to_make, i_render, curr_screen);
+            create_background(nb_render_to_make, i_render, curr_screen);
+            create_segment(nb_render_to_make, i_render, curr_screen);
+            create_border(nb_render_to_make, i_render, curr_screen);
         }
     }
 }
