@@ -2,7 +2,7 @@
 
 #if defined(__3DS__)
     #include <3ds.h>
-
+    
     uint64_t time_us_64_p(void) {
         return svcGetSystemTick() / CPU_TICKS_PER_USEC;
     }

@@ -5,8 +5,6 @@
 #include <SM5XX\Base_Structure.h>
 #include "virtual_i_o/time_addresses.h"
 
-#define NO_WAIT_CYCLE true 
-
 
 constexpr uint8_t ROM_WORD = 63; // each SM5XX have 63 rom word -> it's why program counter is the same
 constexpr uint32_t FREQUENCY_CPU = 32768; // Hz = 32,768 kHZ => 30.517us 1 cycle => 61us for almost instruction
@@ -61,8 +59,6 @@ protected:
 
     // other variables
     bool is_sleep; // cpu sleep -> low consumption (true mode on SM5xx)
-    uint64_t time_last_group_cycle; // used for synchronisation of speed of cpu
-    uint64_t nb_group_cycle; // used for synchronisation of speed of cpu
     uint8_t flag_time_update_screen; // used for update screen in good time
 
     bool time_set_state = false;
