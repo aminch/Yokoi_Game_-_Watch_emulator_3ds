@@ -12,7 +12,6 @@ bool SM5XX::step(){ // loop of CPU
     if(cycle_curr_opcode <= 0){
         debug_theorie_time = debug_cycle_curr_opcode * time_per_cycle_us; 
         debug_cycle_previous_opcode = debug_cycle_curr_opcode;
-        debug_time_execute = ((int64_t)time_us_64_p() - debug_time_execute);
         
         execution_opcode = true;
         cycle_curr_opcode = 0x00; // safety -> never less than 0
@@ -33,7 +32,6 @@ bool SM5XX::step(){ // loop of CPU
         debug_cycle_curr_opcode = cycle_curr_opcode;
     }
     execute_cycle();
-    if(cycle_curr_opcode <= 0){ debug_time_execute = (int64_t)time_us_64_p(); }
 
     return execution_opcode;
 }

@@ -23,10 +23,14 @@
 #include "virtual_i_o/3ds_screen.h"
 #include "virtual_i_o/3ds_sound.h"
 #include "virtual_i_o/virtual_input.h"
+#include "virtual_i_o/3ds_input.h"
+
 
 const float _3DS_FPS_SCREEN_ = 60;
 const int input_setting = (KEY_L|KEY_B);
 const int input_menu = (KEY_L|KEY_R);
+
+uint8_t index_game = 0;
 
 bool get_cpu(SM5XX*& cpu, const uint8_t* rom, uint16_t size_rom){
     if(size_rom == 1856){
@@ -46,7 +50,6 @@ bool get_cpu(SM5XX*& cpu, const uint8_t* rom, uint16_t size_rom){
     return false;
 }
 
-uint8_t index_game = 0;
 
 void set_time_cpu(SM5XX* cpu) {
     if (!cpu->is_time_set()) {

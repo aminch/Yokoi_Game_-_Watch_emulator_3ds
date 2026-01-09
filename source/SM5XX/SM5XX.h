@@ -201,7 +201,6 @@ public :
     uint16_t debug_divider_time(){ return f_clock_divider; }
 
     int64_t debug_time_wait;
-    int64_t debug_time_execute;
     int64_t debug_time_need;
     int64_t debug_opcode_time;
     uint32_t debug_nb_jump_LAX;
