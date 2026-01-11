@@ -17,7 +17,7 @@ from source import img_manipulation as im
 from source.target_profiles import get_target
 
 ROMPACK_FORMAT_VERSION = 2
-ROMPACK_CONTENT_VERSION = 1
+ROMPACK_CONTENT_VERSION = 2
 
 INKSCAPE_PATH = r"D:\Program Files\Inkscape\bin\inkscape.exe"
 
@@ -472,7 +472,7 @@ def generate_game_file(destination_game_file, name, display_name, ref, date
     if(two_in_one_screen): size_background[0] = size_background[1]
         
     if(mask): background_path = [] # background used for create segment
-    bg_text, _background_info_ints = background_data_file(
+    bg_text, background_info_ints = background_data_file(
         name,
         background_path,
         size_background,

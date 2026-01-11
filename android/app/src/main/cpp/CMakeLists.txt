@@ -8,7 +8,7 @@ option(YOKOI_EXTERNAL_ROMPACK_ONLY "Build without compiled-in ROMs/assets; requi
 
 # Minimum external pack content version that this build accepts.
 # Bump this when the app expects newer pack contents (textures/layout/etc.).
-set(YOKOI_ROMPACK_REQUIRED_CONTENT_VERSION "1" CACHE STRING "Minimum required ROM pack content version")
+set(YOKOI_ROMPACK_REQUIRED_CONTENT_VERSION "2" CACHE STRING "Minimum required ROM pack content version")
 
 # Repo root from android/app/src/main/cpp
 set(YOKOI_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../..")

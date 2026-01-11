@@ -46,7 +46,7 @@ ROMPACK_ONLY ?= 0
 
 # Minimum external pack content version that this build accepts.
 # Bump this when the app expects newer pack contents (textures/layout/etc.).
-ROMPACK_CONTENT_VERSION_REQUIRED ?= 1
+ROMPACK_CONTENT_VERSION_REQUIRED ?= 2
 
 # Extra defines for pack-only builds (appended after CFLAGS is set).
 ROMPACK_DEFINES ?=
