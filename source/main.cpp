@@ -359,8 +359,24 @@ void restore_single_screen_console(Virtual_Screen* v_screen) {
     }
 }
 
+
+void load_screen(Virtual_Screen* v_screen){
+    v_screen->set_text("Loading...", 60, 100, 0, 2);
+    v_screen->set_text("Please wait", 160, 140, 0, 2);
+    
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    v_screen->update_text();
+    v_screen->update_img(false);
+    C3D_FrameEnd(0);
+}
+
+
+
 bool init_game(SM5XX** cpu, Virtual_Screen* v_screen, Virtual_Sound* v_sound, Virtual_Input** v_input, bool load_save){
     YOKOI_LOG("init_game: start index=%u load_save=%d", (unsigned)index_game, load_save ? 1 : 0);
+    
+    load_screen(v_screen);
+
     v_screen->Quit_Game();
     v_sound->Quit_Game();
 
@@ -503,6 +519,8 @@ void update_settings_display(Virtual_Screen* v_screen) {
     v_screen->update_img(false);
     C3D_FrameEnd(0);
 }
+
+
 
 bool handle_settings_input(Virtual_Screen* v_screen, Input_Manager_3ds* input_manager) {
 
