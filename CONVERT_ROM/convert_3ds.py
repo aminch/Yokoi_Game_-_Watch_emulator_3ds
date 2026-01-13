@@ -928,6 +928,20 @@ if __name__ == "__main__":
         help="Enable multiprocessing when building multiple games",
     )
     parser.add_argument(
+        "--sort",
+        default="none",
+        choices=["none", "key", "display_name", "date", "ref"],
+        help=(
+            "Optional deterministic ordering for games in the generated pack. "
+            "This affects the menu order (pack entry order). Default 'none' preserves games_path order."
+        ),
+    )
+    parser.add_argument(
+        "--sort-reverse",
+        action="store_true",
+        help="Reverse the selected --sort ordering.",
+    )
+    parser.add_argument(
         "-c",
         "--clean",
         dest="reset_img_svg",
@@ -979,6 +993,22 @@ if __name__ == "__main__":
         keys_to_process = [args.game]
     else:
         keys_to_process = list(games_path.keys())
+
+        if args.sort != "none":
+            def _sort_key(k: str):
+                g = games_path.get(k, {})
+                if args.sort == "key":
+                    return k
+                if args.sort == "display_name":
+                    return str(g.get("display_name", k))
+                if args.sort == "date":
+                    # Expect YYYY-MM-DD; string sort works for this format.
+                    return str(g.get("date", ""))
+                if args.sort == "ref":
+                    return str(g.get("ref", ""))
+                return k
+
+            keys_to_process = sorted(keys_to_process, key=_sort_key, reverse=bool(args.sort_reverse))
 
     for key in keys_to_process:
         game_data = games_path[key].copy()
