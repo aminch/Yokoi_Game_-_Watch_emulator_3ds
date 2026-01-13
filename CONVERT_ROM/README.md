@@ -78,6 +78,12 @@ Common command‑line arguments:
   - Enable multiprocessing when building multiple games. (Not well tested)
 - `-c`, `--clean`
   - Delete and regenerate `./tmp/img/<game>` before processing. If combined with `-g` only the single game data will be deleted.
+- `--sort {none,key,display_name,date,ref}`
+  - Optional deterministic ordering for games in the generated ROM pack.
+  - This affects the pack entry order, which is the menu order on 3DS/Android pack-only builds.
+  - Default is `none`, which preserves the iteration order from the `games_path_<target>.py` dict.
+- `--sort-reverse`
+  - Reverse the selected `--sort` ordering.
 
 Example invocation:
 
@@ -86,6 +92,12 @@ python convert_3ds.py
 
 # Convert only Crab Grab, and clean away files first
 python convert_3ds.py -c -g Crab_grab
+
+# Build an RGDS pack with games sorted by display name (menu order)
+python convert_3ds.py --target rgds --sort display_name
+
+# Build a 3DS pack sorted by ref, descending
+python convert_3ds.py --target 3ds --sort ref --sort-reverse
 ```
 
 ### Targets / screen profiles
