@@ -137,17 +137,24 @@ void yokoi_load_game_by_index_and_init(uint8_t idx) {
 }
 
 uint8_t yokoi_get_default_game_index_for_android() {
-    // Prefer last selected game; fall back to Donkey Kong II.
-    uint8_t idx = load_last_game_index();
     size_t n = get_nb_name();
     if (n == 0) {
         return 0;
     }
+
+    // Prefer last selected game if we have one recorded.
+    if (g_settings.last_game_name[0] != '\0') {
+        uint8_t idx = load_last_game_index();
+        if (idx >= (uint8_t)n) {
+            idx = 0;
+        }
+        return idx;
+    }
+
+    // No saved last game: fall back to a preferred title; if not present, use first game.
+    uint8_t idx = find_game_index_by_ref("JR_55");
     if (idx >= (uint8_t)n) {
         idx = 0;
-    }
-    if (idx == 0) {
-        idx = find_game_index_by_ref("JR_55");
     }
     return idx;
 }

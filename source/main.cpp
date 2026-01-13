@@ -651,6 +651,16 @@ int main()
     // Load the last selected game index
     index_game = load_last_game_index();
 
+    // If the current pack has fewer games than when settings were saved, default to first game.
+    {
+        const size_t n = get_nb_name();
+        if (n == 0) {
+            index_game = 0;
+        } else if (index_game >= (uint8_t)n) {
+            index_game = 0;
+        }
+    }
+
     uint32_t curr_rate = 0;
 
     GameState state = STATE_MENU;
