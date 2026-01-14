@@ -78,6 +78,12 @@ Common command‑line arguments:
   - Enable multiprocessing when building multiple games. (Not well tested)
 - `-c`, `--clean`
   - Delete and regenerate `./tmp/img/<game>` before processing. If combined with `-g` only the single game data will be deleted.
+- `--sort {none,key,display_name,date,ref}`
+  - Optional deterministic ordering for games in the generated ROM pack.
+  - This affects the pack entry order, which is the menu order on 3DS/Android pack-only builds.
+  - Default is `none`, which preserves the iteration order from the `games_path_<target>.py` dict.
+- `--sort-reverse`
+  - Reverse the selected `--sort` ordering.
 
 Example invocation:
 
@@ -86,7 +92,26 @@ python convert_3ds.py
 
 # Convert only Crab Grab, and clean away files first
 python convert_3ds.py -c -g Crab_grab
+
+# Build an RGDS pack with games sorted by display name (menu order)
+python convert_3ds.py --target rgds --sort display_name
+
+# Build a 3DS pack sorted by ref, descending
+python convert_3ds.py --target 3ds --sort ref --sort-reverse
 ```
+
+#### External tool configuration (Inkscape / tex3ds)
+
+Some steps use external executables whose install paths differ per machine:
+
+- **Inkscape**: used to export SVG layers to PNGs.
+- **tex3ds**: used only for the `--target 3ds` pipeline to build `.t3x` from generated `.t3s`.
+
+To configure these tools:
+
+1. Copy `CONVERT_ROM/external_apps_template.py` to `CONVERT_ROM/external_apps.py`
+2. Edit `INKSCAPE_PATH` and `TEX3DS_PATH` to match your system
+
 
 ### Targets / screen profiles
 
@@ -115,16 +140,18 @@ An external rom pack is now build at the same time as the embedded rom files. Th
 python convert_3ds.py --target rgds
 ```
 
-#### 3DS pack (v1):
+#### 3DS pack:
 
 ```powershell
 # Writes into the CONVERT_ROM folder as "yokoi_pack_3ds_vX.X.ykp".
 python convert_3ds.py --target 3ds
 ```
 
+Note: Use the --sort option on the `convert_3ds.py` script to order the games by date, name, etc if desired
+
 The rom pack files above are named with the pack version and content version (i.e. vX.X)
 
-Note: the 3DS pack bundles `.t3x` textures. `convert_3ds.py` will invoke `tex3ds` to build them, so devkitPro/devkitARM must be installed and `TEX3DS_PATH` (near the top of `convert_3ds.py`) must point to your `tex3ds` executable (or `tex3ds` must be on PATH).
+Note: the 3DS pack bundles `.t3x` textures. `convert_3ds.py` will invoke `tex3ds` to build them, so devkitPro/devkitARM must be installed and `TEX3DS_PATH` in `CONVERT_ROM/external_apps.py` must point to your `tex3ds` executable (or `tex3ds` must be on PATH).
 
 #### Rom pack locations
 

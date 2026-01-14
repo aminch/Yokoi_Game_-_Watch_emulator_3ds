@@ -19,11 +19,14 @@ from source.target_profiles import get_target
 ROMPACK_FORMAT_VERSION = 2
 ROMPACK_CONTENT_VERSION = 2
 
-INKSCAPE_PATH = r"D:\Program Files\Inkscape\bin\inkscape.exe"
-
-# Path to tex3ds executable (devkitPro). If you have tex3ds on PATH you can leave this as "tex3ds".
-# Example Windows install path (adjust as needed): r"C:\devkitPro\tools\bin\tex3ds.exe"
-TEX3DS_PATH = r"C:\devkitPro\tools\bin\tex3ds.exe"
+# Configurable external apps.
+# Configure them by copying CONVERT_ROM/external_apps_template.py -> CONVERT_ROM/external_apps.py.
+try:
+    from external_apps import INKSCAPE_PATH, TEX3DS_PATH  # type: ignore
+except Exception:
+    # Defaults
+    INKSCAPE_PATH = r"C:\Program Files\Inkscape\bin\inkscape.exe"
+    TEX3DS_PATH = r"C:\devkitPro\tools\bin\tex3ds.exe"
 
 destination_file = r"..\source\std\GW_ALL.h"
 destination_game_file = r"..\source\std\GW_ROM"
@@ -716,7 +719,7 @@ def _build_tex3ds_outputs_for_pack(t3s_dir: Path, t3x_out_dir: Path) -> None:
         except FileNotFoundError as e:
             raise RuntimeError(
                 f"tex3ds was not found at '{TEX3DS_PATH}'. Install devkitPro/devkitARM and set TEX3DS_PATH "
-                "near the top of convert_3ds.py (or put tex3ds on PATH)."
+                "in CONVERT_ROM/external_apps.py (copy from external_apps_template.py), or put tex3ds on PATH."
             ) from e
         except subprocess.CalledProcessError as e:
             stderr = (e.stderr or "").strip()
@@ -928,6 +931,20 @@ if __name__ == "__main__":
         help="Enable multiprocessing when building multiple games",
     )
     parser.add_argument(
+        "--sort",
+        default="none",
+        choices=["none", "key", "display_name", "date", "ref"],
+        help=(
+            "Optional deterministic ordering for games in the generated pack. "
+            "This affects the menu order (pack entry order). Default 'none' preserves games_path order."
+        ),
+    )
+    parser.add_argument(
+        "--sort-reverse",
+        action="store_true",
+        help="Reverse the selected --sort ordering.",
+    )
+    parser.add_argument(
         "-c",
         "--clean",
         dest="reset_img_svg",
@@ -979,6 +996,22 @@ if __name__ == "__main__":
         keys_to_process = [args.game]
     else:
         keys_to_process = list(games_path.keys())
+
+        if args.sort != "none":
+            def _sort_key(k: str):
+                g = games_path.get(k, {})
+                if args.sort == "key":
+                    return k
+                if args.sort == "display_name":
+                    return str(g.get("display_name", k))
+                if args.sort == "date":
+                    # Expect YYYY-MM-DD; string sort works for this format.
+                    return str(g.get("date", ""))
+                if args.sort == "ref":
+                    return str(g.get("ref", ""))
+                return k
+
+            keys_to_process = sorted(keys_to_process, key=_sort_key, reverse=bool(args.sort_reverse))
 
     for key in keys_to_process:
         game_data = games_path[key].copy()
