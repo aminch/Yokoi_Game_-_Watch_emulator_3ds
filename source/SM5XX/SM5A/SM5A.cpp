@@ -1,4 +1,4 @@
-
+#include "SM5XX/SM5A/SM5A.h"
 #include "SM5XX/SM5A/sm5A.h"
 #include "std/timer.h"
 #include <cstring>
@@ -41,8 +41,6 @@ void SM5A::init()
     }
 
     segments_state_are_update = false;
-    time_last_group_cycle = time_us_64_p();
-    nb_group_cycle = 0;
     cycle_curr_opcode = 0;
 
     for(int col = 0; col < SM5A_SEGMENT_COL; col++){
@@ -113,6 +111,11 @@ void SM5A::write_ram_value(uint8_t value){
     ram[col][line] = (value & 0x0F);
 }
 
+void SM5A::set_ram_value(uint8_t col, uint8_t line, uint8_t value) {
+    if (col >= SM5A_RAM_COL || line >= SM5A_RAM_LINE) 
+        return;
+    ram[col][line] = value;
+}
 
 
 

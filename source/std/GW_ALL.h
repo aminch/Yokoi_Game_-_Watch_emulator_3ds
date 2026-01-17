@@ -3,114 +3,120 @@
 
 #include "GW_ROM/ball.h"
 extern const GW_rom ball;
-#include "GW_ROM/Flagman.h"
-extern const GW_rom Flagman;
-#include "GW_ROM/Vermin.h"
-extern const GW_rom Vermin;
-#include "GW_ROM/Fire.h"
-extern const GW_rom Fire;
-#include "GW_ROM/Judge.h"
-extern const GW_rom Judge;
-#include "GW_ROM/Manhole.h"
-extern const GW_rom Manhole;
-#include "GW_ROM/Helmet.h"
-extern const GW_rom Helmet;
-#include "GW_ROM/Lion.h"
-extern const GW_rom Lion;
-#include "GW_ROM/Parachute.h"
-extern const GW_rom Parachute;
+#include "GW_ROM/flagman.h"
+extern const GW_rom flagman;
+#include "GW_ROM/vermin.h"
+extern const GW_rom vermin;
+#include "GW_ROM/fire.h"
+extern const GW_rom fire;
+#include "GW_ROM/judge.h"
+extern const GW_rom judge;
+#include "GW_ROM/manhole.h"
+extern const GW_rom manhole;
+#include "GW_ROM/helmet.h"
+extern const GW_rom helmet;
+#include "GW_ROM/lion.h"
+extern const GW_rom lion;
+#include "GW_ROM/parachute.h"
+extern const GW_rom parachute;
 #include "GW_ROM/octopus.h"
 extern const GW_rom octopus;
-#include "GW_ROM/Popeye.h"
-extern const GW_rom Popeye;
-#include "GW_ROM/Chef.h"
-extern const GW_rom Chef;
-#include "GW_ROM/Mickey_Mouse.h"
-extern const GW_rom Mickey_Mouse;
-#include "GW_ROM/Egg.h"
-extern const GW_rom Egg;
-#include "GW_ROM/Fire_wide_screen.h"
-extern const GW_rom Fire_wide_screen;
-#include "GW_ROM/Turtle_Bridge.h"
-extern const GW_rom Turtle_Bridge;
-#include "GW_ROM/Fire_Attack.h"
-extern const GW_rom Fire_Attack;
-#include "GW_ROM/Snoopy_Tennis.h"
-extern const GW_rom Snoopy_Tennis;
-#include "GW_ROM/Oil_Panic.h"
-extern const GW_rom Oil_Panic;
-#include "GW_ROM/Donkey_kong.h"
-extern const GW_rom Donkey_kong;
-#include "GW_ROM/Donkey_Kong_JR.h"
-extern const GW_rom Donkey_Kong_JR;
-#include "GW_ROM/Mickey_Donald.h"
-extern const GW_rom Mickey_Donald;
-#include "GW_ROM/Green_House.h"
-extern const GW_rom Green_House;
-#include "GW_ROM/Donkey_Kong_2.h"
-extern const GW_rom Donkey_Kong_2;
-#include "GW_ROM/Mario_Bros.h"
-extern const GW_rom Mario_Bros;
-#include "GW_ROM/Mario_Cement_Factory_panorama.h"
-extern const GW_rom Mario_Cement_Factory_panorama;
-#include "GW_ROM/Mario_Cement_Factory.h"
-extern const GW_rom Mario_Cement_Factory;
-#include "GW_ROM/Rain_Shower.h"
-extern const GW_rom Rain_Shower;
-#include "GW_ROM/Manhole_wide_screen.h"
-extern const GW_rom Manhole_wide_screen;
-#include "GW_ROM/Snoopy_Table_Top.h"
-extern const GW_rom Snoopy_Table_Top;
-#include "GW_ROM/Popeye_Table_Top.h"
-extern const GW_rom Popeye_Table_Top;
-#include "GW_ROM/Donkey_Kong_Circus.h"
-extern const GW_rom Donkey_Kong_Circus;
-#include "GW_ROM/DK_JR_panorama.h"
-extern const GW_rom DK_JR_panorama;
-#include "GW_ROM/Life_Boat.h"
-extern const GW_rom Life_Boat;
-#include "GW_ROM/Mario_Bombs_Away.h"
-extern const GW_rom Mario_Bombs_Away;
-#include "GW_ROM/Pinball.h"
-extern const GW_rom Pinball;
-#include "GW_ROM/Mickey_Mouse_panorama.h"
-extern const GW_rom Mickey_Mouse_panorama;
+#include "GW_ROM/popeye.h"
+extern const GW_rom popeye;
+#include "GW_ROM/chef.h"
+extern const GW_rom chef;
+#include "GW_ROM/mickey_mouse.h"
+extern const GW_rom mickey_mouse;
+#include "GW_ROM/egg.h"
+extern const GW_rom egg;
+#include "GW_ROM/fire_wide_screen.h"
+extern const GW_rom fire_wide_screen;
+#include "GW_ROM/turtle_bridge.h"
+extern const GW_rom turtle_bridge;
+#include "GW_ROM/fire_attack.h"
+extern const GW_rom fire_attack;
+#include "GW_ROM/snoopy_tennis.h"
+extern const GW_rom snoopy_tennis;
+#include "GW_ROM/oil_panic.h"
+extern const GW_rom oil_panic;
+#include "GW_ROM/donkey_kong.h"
+extern const GW_rom donkey_kong;
+#include "GW_ROM/donkey_kong_jr.h"
+extern const GW_rom donkey_kong_jr;
+#include "GW_ROM/mickey_donald.h"
+extern const GW_rom mickey_donald;
+#include "GW_ROM/green_house.h"
+extern const GW_rom green_house;
+#include "GW_ROM/donkey_kong_2.h"
+extern const GW_rom donkey_kong_2;
+#include "GW_ROM/mario_bros.h"
+extern const GW_rom mario_bros;
+#include "GW_ROM/mario_cement_factory_panorama.h"
+extern const GW_rom mario_cement_factory_panorama;
+#include "GW_ROM/mario_cement_factory.h"
+extern const GW_rom mario_cement_factory;
+#include "GW_ROM/rain_shower.h"
+extern const GW_rom rain_shower;
+#include "GW_ROM/manhole_wide_screen.h"
+extern const GW_rom manhole_wide_screen;
+#include "GW_ROM/snoopy_table_top.h"
+extern const GW_rom snoopy_table_top;
+#include "GW_ROM/popeye_table_top.h"
+extern const GW_rom popeye_table_top;
+#include "GW_ROM/donkey_kong_circus.h"
+extern const GW_rom donkey_kong_circus;
+#include "GW_ROM/dk_jr_panorama.h"
+extern const GW_rom dk_jr_panorama;
+#include "GW_ROM/life_boat.h"
+extern const GW_rom life_boat;
+#include "GW_ROM/mario_bombs_away.h"
+extern const GW_rom mario_bombs_away;
+#include "GW_ROM/pinball.h"
+extern const GW_rom pinball;
+#include "GW_ROM/mickey_mouse_panorama.h"
+extern const GW_rom mickey_mouse_panorama;
 #include "GW_ROM/crab_grab.h"
 extern const GW_rom crab_grab;
-#include "GW_ROM/Spitball_Sparky.h"
-extern const GW_rom Spitball_Sparky;
+#include "GW_ROM/spitball_sparky.h"
+extern const GW_rom spitball_sparky;
 #include "GW_ROM/boxing.h"
 extern const GW_rom boxing;
-#include "GW_ROM/Donkey_Kong_3.h"
-extern const GW_rom Donkey_Kong_3;
-#include "GW_ROM/Donkey_Kong_hockey.h"
-extern const GW_rom Donkey_Kong_hockey;
+#include "GW_ROM/donkey_kong_3.h"
+extern const GW_rom donkey_kong_3;
+#include "GW_ROM/donkey_kong_hockey.h"
+extern const GW_rom donkey_kong_hockey;
 #include "GW_ROM/black_jack.h"
 extern const GW_rom black_jack;
-#include "GW_ROM/Tropical_Fish.h"
-extern const GW_rom Tropical_Fish;
-#include "GW_ROM/Squish.h"
-extern const GW_rom Squish;
+#include "GW_ROM/tropical_fish.h"
+extern const GW_rom tropical_fish;
+#include "GW_ROM/squish.h"
+extern const GW_rom squish;
+#include "GW_ROM/super_mario_bros_cristal_screen.h"
+extern const GW_rom super_mario_bros_cristal_screen;
+#include "GW_ROM/ice_climber_cristal_screen.h"
+extern const GW_rom ice_climber_cristal_screen;
+#include "GW_ROM/balloon_fight_cristal_screen.h"
+extern const GW_rom balloon_fight_cristal_screen;
 #include "GW_ROM/bomb_sweeper.h"
 extern const GW_rom bomb_sweeper;
-#include "GW_ROM/Safe_Buster.h"
-extern const GW_rom Safe_Buster;
-#include "GW_ROM/Super_Mario_Bros.h"
-extern const GW_rom Super_Mario_Bros;
-#include "GW_ROM/Ice_Climber.h"
-extern const GW_rom Ice_Climber;
-#include "GW_ROM/Balloon_Fight.h"
-extern const GW_rom Balloon_Fight;
-#include "GW_ROM/Zelda.h"
-extern const GW_rom Zelda;
-#include "GW_ROM/Gold_Cliff.h"
-extern const GW_rom Gold_Cliff;
-#include "GW_ROM/Mario_the_Juggle.h"
-extern const GW_rom Mario_the_Juggle;
+#include "GW_ROM/safe_buster.h"
+extern const GW_rom safe_buster;
+#include "GW_ROM/super_mario_bros.h"
+extern const GW_rom super_mario_bros;
+#include "GW_ROM/ice_climber.h"
+extern const GW_rom ice_climber;
+#include "GW_ROM/balloon_fight.h"
+extern const GW_rom balloon_fight;
+#include "GW_ROM/zelda.h"
+extern const GW_rom zelda;
+#include "GW_ROM/gold_cliff.h"
+extern const GW_rom gold_cliff;
+#include "GW_ROM/mario_the_juggle.h"
+extern const GW_rom mario_the_juggle;
 
 
 
 
-const GW_rom* GW_list[] = {&ball, &Flagman, &Vermin, &Fire, &Judge, &Manhole, &Helmet, &Lion, &Parachute, &octopus, &Popeye, &Chef, &Mickey_Mouse, &Egg, &Fire_wide_screen, &Turtle_Bridge, &Fire_Attack, &Snoopy_Tennis, &Oil_Panic, &Donkey_kong, &Donkey_Kong_JR, &Mickey_Donald, &Green_House, &Donkey_Kong_2, &Mario_Bros, &Mario_Cement_Factory_panorama, &Mario_Cement_Factory, &Rain_Shower, &Manhole_wide_screen, &Snoopy_Table_Top, &Popeye_Table_Top, &Donkey_Kong_Circus, &DK_JR_panorama, &Life_Boat, &Mario_Bombs_Away, &Pinball, &Mickey_Mouse_panorama, &crab_grab, &Spitball_Sparky, &boxing, &Donkey_Kong_3, &Donkey_Kong_hockey, &black_jack, &Tropical_Fish, &Squish, &bomb_sweeper, &Safe_Buster, &Super_Mario_Bros, &Ice_Climber, &Balloon_Fight, &Zelda, &Gold_Cliff, &Mario_the_Juggle};
-const size_t nb_games = 53;
+const GW_rom* GW_list[] = {&ball, &flagman, &vermin, &fire, &judge, &manhole, &helmet, &lion, &parachute, &octopus, &popeye, &chef, &mickey_mouse, &egg, &fire_wide_screen, &turtle_bridge, &fire_attack, &snoopy_tennis, &oil_panic, &donkey_kong, &donkey_kong_jr, &mickey_donald, &green_house, &donkey_kong_2, &mario_bros, &mario_cement_factory_panorama, &mario_cement_factory, &rain_shower, &manhole_wide_screen, &snoopy_table_top, &popeye_table_top, &donkey_kong_circus, &dk_jr_panorama, &life_boat, &mario_bombs_away, &pinball, &mickey_mouse_panorama, &crab_grab, &spitball_sparky, &boxing, &donkey_kong_3, &donkey_kong_hockey, &black_jack, &tropical_fish, &squish, &super_mario_bros_cristal_screen, &ice_climber_cristal_screen, &balloon_fight_cristal_screen, &bomb_sweeper, &safe_buster, &super_mario_bros, &ice_climber, &balloon_fight, &zelda, &gold_cliff, &mario_the_juggle};
+const size_t nb_games = 56;
 
