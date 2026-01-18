@@ -461,10 +461,6 @@ def generate_game_file(destination_game_file, name, display_name, ref, date
                 , melody_path = '', background_path = [], rotate = False, mask = False, color_segment = False, two_in_one_screen = False
                 , transform = [], alpha_bright = 1.7, fond_bright = 1.35, shadow = True
                 , background_in_front = False, camera = False, manufacturer = MANUFACTURER_NINTENDO):
-
-    # Generated file naming convention: always lower-case.
-    # This avoids case-mismatch issues on case-sensitive filesystems and keeps includes consistent.
-    name = str(name).lower()
     
     c_file = f"""
 #include <cstdint>
@@ -565,11 +561,10 @@ def generate_global_file(games_path, destination_file):
 
 """
     for key in games_path:
-        key = str(key).lower()
         c_file_final += f'#include "{gw_rom_include_dir}/{key}.h"\nextern const GW_rom {key};\n'
 
     c_file_final += "\n\n\n\n"
-    c_file_final += 'const GW_rom* GW_list[] = {&' + ', &'.join([str(k).lower() for k in games_path.keys()]) + '};\n'
+    c_file_final += 'const GW_rom* GW_list[] = {&' + ', &'.join(games_path.keys()) + '};\n'
     c_file_final += 'const size_t nb_games = ' + str(len(games_path.keys()))+ ';\n\n'
     
     with open(destination_file, "w") as f: f.write(c_file_final)
