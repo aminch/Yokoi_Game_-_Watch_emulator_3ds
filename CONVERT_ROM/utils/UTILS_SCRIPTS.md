@@ -5,9 +5,9 @@ This folder includes utility scripts that are **not required** for normal conver
 ## Links
 
 Useful sites with large databases on 1980s and 1990s LCD Games:
-- http://handheldempire.com/
-- https://electronicplastic.com/
-- https://www.lucklessheaven.com/gameandwatch-release-order
+- http://handheldempire.com/ - DB on LCD games
+- https://electronicplastic.com/ - DB on LCD games
+- https://www.lucklessheaven.com/gameandwatch-release-order - Details on Game & Watch releases
 
 ## Scripts
 
