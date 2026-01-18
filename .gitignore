@@ -30,6 +30,9 @@ games_path_*.py
 # Per-machine tool configuration (copy from CONVERT_ROM/external_apps_template.py)
 CONVERT_ROM/external_apps.py
 
+# Dev script outputs
+CONVERT_ROM/EXTRACTED_LIST*.md
+
 Yokoi*.3dsx
 Yokoi*.elf
 Yokoi*.cia
