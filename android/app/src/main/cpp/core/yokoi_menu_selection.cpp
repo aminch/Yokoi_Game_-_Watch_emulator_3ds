@@ -42,7 +42,9 @@ void yokoi_menu_select_game_by_index(uint8_t idx) {
     // Remember last selected per manufacturer so switching manufacturers restores the user's last choice.
     g_last_idx_by_mfr[g_game->manufacturer] = (int16_t)idx;
 
-    save_last_selected_game(g_game->manufacturer, get_name(idx));
+    // Persist by stable ref (NOT display name) so we can restore across runs.
+    // settings.cpp resolves saved entries by comparing against get_ref(i).
+    save_last_selected_game(g_game->manufacturer, get_ref(idx));
     rebuild_layout_for_menu();
     g_texture_generation.fetch_add(1);
 }
