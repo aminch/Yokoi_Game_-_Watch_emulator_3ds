@@ -719,17 +719,10 @@ def generate_games_path(target_name: str | None = None) -> bool:
             rom_path=rom_path,
         )
 
-        rom_stem = rom_path.stem.strip()
-        if rom_stem == "0019_238e":
-            ref_value = "mg-8"
-        elif metadata and metadata.model:
-            ref_value = metadata.model.strip().lower()
-        elif rom_stem:
-            ref_value = rom_stem
-        elif model_ref:
-            ref_value = model_ref.strip()
-        else:
-            ref_value = ""
+        # `GNW_LIST.md` is the source of truth for model/ref.
+        ref_value = (metadata.model or "").strip().lower()
+        if not ref_value:
+            raise ValueError(f"Missing model for {name} in GNW_LIST.md")
 
         display_source = metadata.display_title
         key_candidate = _sanitize_key(display_source or name, name)
