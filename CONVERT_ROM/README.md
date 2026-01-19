@@ -25,6 +25,7 @@ If you are looking for how to build the apps themselves, see [BUILDING.md](/BUIL
     - [`convert_3ds.py`](#convert_3dspy)
   - [External ROM pack](#external-rom-pack)
     - [Rom pack locations](#rom-pack-locations)
+  - [Developer SCripts](#developer-scripts)
 
 ## Supported games
 
@@ -194,7 +195,6 @@ python convert_3ds.py --target rgds --sort display_name
 python convert_3ds.py --target 3ds --sort ref --sort-reverse
 ```
 
-
 ## External ROM pack
 
 An external ROM pack is built at the same time as the embedded asset files. This external ROM pack can be used with both Android and 3DS builds that do not include embedded assets.
@@ -206,4 +206,6 @@ The rom pack files are named with the pack version and content version (i.e. `vX
 - Android: the app asks to import/update the ROM pack when needed; select the file and it is copied into place.
 - 3DS: pack-only builds require `sdmc:/3ds/yokoi_pack_3ds.ykp`.
 
+## Developer SCripts
 
+For dev-only utility scripts (e.g. `extract_games_from_mame_dat.py`), see [utils/UTILS_SCRIPTS.md](/CONVERT_ROM/utils/UTILS_SCRIPTS.md).
