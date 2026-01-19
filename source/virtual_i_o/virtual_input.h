@@ -1570,6 +1570,36 @@ class MG_8 : public Virtual_Input{
         }
 };
 
+////// Diver's Adventure : SM11 //////
+class DA_37 : public Virtual_Input{
+    public : 
+        DA_37(SM5XX* c) : Virtual_Input(c) {
+            left_configuration = CONF_1_BUTTON_ACTION;
+            right_configuration = CONF_2_BUTTON_UPDOWN;
+        }
+
+        void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
+            switch (part) {
+                case PART_SETUP:
+                    switch (button) {
+                        case BUTTON_TIME: cpu->input_set(1, 0, state); break;
+                        case BUTTON_GAMEB: cpu->input_set(1, 1, state); break;
+                        case BUTTON_GAMEA: cpu->input_set(1, 2, state); break;
+                        case BUTTON_ALARM: cpu->input_set(1, 3, state); break;
+                        default: break; } break;
+                case PART_LEFT:
+                    switch (button) {
+                        case BUTTON_LEFT: cpu->input_set(0, 3, state); break;
+                        default: break; } break;
+                case PART_RIGHT:
+                    switch (button) {
+                        case BUTTON_UP: cpu->input_set(0, 0, state); break; 
+                        case BUTTON_DOWN: cpu->input_set(0, 1, state); break; 
+                        default: break; } break;
+                default: break;
+            }
+        }
+};
 
 ////// punch_out : SM11 //////
 class BX_301 : public Virtual_Input{
@@ -1671,6 +1701,7 @@ inline Virtual_Input* get_input_config(SM5XX* cpu, std::string ref_game){
     else if (ref_game == "BU_201") { return new BU_201(cpu); } // Spitball Sparky
     else if (ref_game == "UD_202") { return new UD_202(cpu); } // Crab Grab
     else if (ref_game == "MG_8" || ref_game == "TG_18")   { return new MG_8(cpu); }   // Shuttle Voyage / Thief in Garden (Tronica)
+    else if (ref_game == "CC_38V" || ref_game == "DA_37")   { return new DA_37(cpu); }   // Diver's Adventure / Clever Chicken (Tronica)
     
 
     /* SM511/SM512 */

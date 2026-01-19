@@ -561,12 +561,15 @@ def _rom_fallback_candidates(name: str) -> List[str]:
         if len(trimmed) >= 3:
             candidates.append(trimmed)
 
+    # List of child and parent roms, used for fallback when no rom found
     if name == "gnw_egg":
         candidates.append("gnw_mmouse")
     if name == "gnw_dkcirc":
         candidates.append("gnw_mmousep")
     if name == "tigarden":
         candidates.append("trshutvoy")
+    if name == "trclchick":
+        candidates.append("trdivadv")
 
     return candidates
 
