@@ -183,6 +183,12 @@ Command-line arguments:
   - Enable multiprocessing when building multiple games. (Not well tested)
 - `-c`, `--clean`
   - Delete and regenerate `./tmp/img/<game>` cache files before processing. If combined with `-g` only the single game data will be deleted.
+- `--use-cache`
+  - **Experimental:** enables a per-game “up-to-date” cache to skip rebuilding games whose inputs/options and expected outputs have not changed.
+  - When enabled, the script prints why a game is being rebuilt (missing outputs, changed inputs/options, invalid cache data) and then continues.
+  - Cache files are stored under `./tmp/cache/`.
+  - Ignored when `-g/--game` is used (single-game runs always rebuild).
+  - If you have problems with your rompack, rebuild **WITHOUT** this option!
 - `--sort {none,key,display_name,date,ref}`
   - Optional deterministic ordering for games in the generated ROM pack.
   - This affects the pack entry order, which is the menu order on 3DS/Android pack-only builds.
