@@ -14,6 +14,7 @@ from typing import Iterable
 
 from source import convert_svg as cs
 from source import img_manipulation as im
+from source import game_cache
 from source.target_profiles import get_target
 from source.manufacturer_ids import (
     MANUFACTURER_NINTENDO,
@@ -647,6 +648,9 @@ def process_single_game(args):
             shutil.rmtree("./tmp/img/" + key)
             print(f"Removed cache folder: tmp/img/{key}")
 
+            # Also invalidate the per-game build cache.
+            game_cache.invalidate_game(key)
+
             # Clean up gfx for this game: remove all .t3s and .png files
             # whose filenames contain the current game key, using glob
             if os.path.exists(destination_graphique_file):
@@ -683,6 +687,11 @@ def process_single_game(args):
     ref_norm = game_data["ref"].replace('-', '_').upper()
     manufacturer = _manufacturer_to_id(game_data.get("manufacturer", 0))
 
+    cached = game_cache.try_load_pack_meta(key, game_data, clean_mode=reset_img_svg)
+    if cached is not None:
+        print(f"(cache) Up-to-date: {key}")
+        return cached
+
     pack_meta = generate_game_file(
         destination_game_file, key, display_name,
         ref_norm, date,
@@ -694,6 +703,8 @@ def process_single_game(args):
         background_in_front, camera,
         manufacturer
     )
+
+    game_cache.write_game_cache(key, game_data, pack_meta)
     
     return pack_meta
 
@@ -975,11 +986,39 @@ if __name__ == "__main__":
         help="Delete and regenerate ./tmp/img/<game> before processing",
     )
 
+    parser.add_argument(
+        "--use-cache",
+        action="store_true",
+        help="Enable per-game up-to-date cache (skip rebuilding games that are unchanged)",
+    )
+
     args = parser.parse_args()
 
     print(f"\n=== convert_3ds.py target: {args.target} ===\n")
 
     apply_profile(args.target, args.out_gfx, args.out_gw_all, args.out_gw_rom_dir, args.export_dpi, args.scale)
+
+    cache_enabled = bool(args.use_cache) and (not bool(args.game))
+    game_cache.configure(
+        enabled=cache_enabled,
+        target_name=str(args.target),
+        cache_dir=Path(r".\\tmp\\cache"),
+        export_dpi=export_dpi,
+        size_scale=size_scale,
+        resolution_up=resolution_up,
+        resolution_down=resolution_down,
+        console_size=console_size,
+        console_atlas_size=console_atlas_size,
+        tex3ds_enabled=tex3ds_enabled,
+        texture_path_prefix=texture_path_prefix,
+        texture_path_ext=texture_path_ext,
+        destination_game_file=destination_game_file,
+        destination_graphique_file=destination_graphique_file,
+        default_console=default_console,
+        default_alpha_bright=default_alpha_bright,
+        default_fond_bright=default_fond_bright,
+        default_rotate=default_rotate,
+    )
 
     # Load games_path based on target.
     games_path = _load_games_path_for_target(args.target)
@@ -1004,6 +1043,7 @@ if __name__ == "__main__":
     
     os.makedirs(r'.\tmp', exist_ok=True)
     os.makedirs(r'.\tmp\img', exist_ok=True)
+    game_cache.ensure_cache_dir()
 
     # Prepare game data with default values (optionally for a single game)
     game_items = []
