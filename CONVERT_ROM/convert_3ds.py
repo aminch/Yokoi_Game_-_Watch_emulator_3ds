@@ -177,16 +177,29 @@ def sort_by_screen(name: str):
 
 
 
+def extract_color_index(filename: str) -> int:
+    parts = filename.split("_")
+    if len(parts) > 1:
+        try:
+            return int(parts[1].split(".")[0])
+        except Exception as e:
+            print(f"[ERROR] Could not parse color_index from filename: {filename}")
+            print(f"  parts: {parts}")
+            print(f"  Exception: {e}")
+            return 0
+    else:
+        print(f"[ERROR] Filename does not contain expected '_': {filename}")
+        return 0
+
+
 def segment_text(all_img, name, color_segment:bool = False):
-    result = f"\nconst Segment segment_GW_{name}[] = {{\n	"
+    result = f"\nconst Segment segment_GW_{name}[] = {{\n\t"
     for data in all_img:
         filename, img_r, screen, pos_x, pos_y, size_x, size_y, pos_x_tex, pos_y_tex = data
         seg_x = int(filename.split(".")[0])
         seg_y = int(filename.split(".")[1])
         seg_z = int(filename.split(".")[2].split("_")[0])
-        color_index = 0
-        if(color_segment): 
-            color_index = int(filename.split("_")[1].split(".")[0])
+        color_index = extract_color_index(filename) if color_segment else 0
         result += f"{{ {{ {seg_x},{seg_y},{seg_z} }}, {{ {pos_x},{pos_y} }}, {{ {pos_x_tex},{pos_y_tex} }}, {{ {size_x},{size_y} }}, {color_index}, {screen}, false, false, 0 }}, "
     result = result[:-2] + "\n};"
     result += f"  const size_t size_segment_GW_{name} = sizeof(segment_GW_{name})/sizeof(segment_GW_{name}[0]); \n"
@@ -284,9 +297,7 @@ def visual_data_file(name, size_list, background_path_list, rotate = False, mask
         seg_x = int(filename.split(".")[0])
         seg_y = int(filename.split(".")[1])
         seg_z = int(filename.split(".")[2].split("_")[0])
-        color_index = 0
-        if color_segment:
-            color_index = int(filename.split("_")[1].split(".")[0])
+        color_index = extract_color_index(filename) if color_segment else 0
         segment_records.append({
             "id0": seg_x,
             "id1": seg_y,
