@@ -38,6 +38,9 @@ inline const TimeAddress* get_time_addresses(const std::string& ref_game) {
         {"MC_25", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Mickey Mouse (Wide Screen)
         {"EG_26", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Egg
         {"FR_27", {3,6, 3,7, 3,8, 3,9, 3,10, 3,11, 8}}, // Fire (Wide Screen)
+        {"SK_10", {0,3, 0,2, 0,1, 0,0, 99,99, 99,99, 8}}, // Super Goal Keeper
+        {"SM_11", {3,6, 3,7, 3,8, 3,9, 3,10, 3,11, 8}}, // Space Mission (Tronica)
+        {"SG_21", {3,6, 3,7, 3,8, 3,9, 3,10, 3,11, 8}}, // Spider (Tronica)
     };
 
     // --- SM510 ---
@@ -71,7 +74,9 @@ inline const TimeAddress* get_time_addresses(const std::string& ref_game) {
         {"MG_8", {3,0, 3,1, 3,3, 3,4, 3,6, 3,7, 2}}, // Shuttle Voyage
         {"TG_18", {3,0, 3,1, 3,3, 3,4, 3,6, 3,7, 2}}, // Thief in Garden
         {"CC_38V", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Clever Chicken
-        {"DA_37", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Diving Adventure
+        {"DA_37", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Diver's Adventure
+        {"MG_9", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Space Rescue
+        {"FR_23", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Thunder Ball (Tronica)
     };
 
     // --- SM511/SM512 ---
@@ -92,6 +97,7 @@ inline const TimeAddress* get_time_addresses(const std::string& ref_game) {
         {"BX_301", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Micro Vs. System: Boxing
         {"AK_302", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Micro Vs. System: Donkey Kong 3
         {"HK_303", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Micro Vs. System: Donkey Kong Hockey
+      //  {"SA_12", {2,0, 2,1, 2,3, 2,4, 2,6, 2,7, 0}}, // Space Adventure
     };
 
     auto it = sm5a_map.find(ref_game);
