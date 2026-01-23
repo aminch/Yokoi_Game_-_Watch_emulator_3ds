@@ -97,7 +97,7 @@ inline const TimeAddress* get_time_addresses(const std::string& ref_game) {
         {"BX_301", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Micro Vs. System: Boxing
         {"AK_302", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Micro Vs. System: Donkey Kong 3
         {"HK_303", {1,4, 1,5, 1,6, 1,7, 1,8, 1,9, 8}}, // Micro Vs. System: Donkey Kong Hockey
-      //  {"SA_12", {2,0, 2,1, 2,3, 2,4, 2,6, 2,7, 0}}, // Space Adventure
+        {"SA_12", {5,4, 5,5, 5,7, 5,8, 5,10, 5,11, 8}}, // Space Adventure (Tronica)
     };
 
     auto it = sm5a_map.find(ref_game);
