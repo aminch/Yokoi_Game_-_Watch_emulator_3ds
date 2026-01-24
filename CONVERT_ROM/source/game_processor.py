@@ -288,6 +288,7 @@ class GameProcessor:
 		combined = img1.copy()
 
 		if mode == "blend":
+			from PIL import ImageChops
 			# Direct blend with transparency control
 			combined = ImageChops.blend(combined.convert("RGB"), img2.convert("RGB"), alpha).convert("RGBA")
 		elif mode == "normal":
