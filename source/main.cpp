@@ -180,7 +180,7 @@ void update_credit(Virtual_Screen* v_screen){
     v_screen->delete_all_text();
     v_screen->delete_all_img();
     
-    text = std::string("<")+text+std::string(">");
+    //text = std::string("<")+text+std::string(">");
     int16_t pos_x = (400 - text.length()*16)/2;
     int16_t pos_y = (240 - 16)/2;
     v_screen->set_text(text, pos_x, pos_y, 0, 2);
@@ -199,10 +199,21 @@ void update_credit(Virtual_Screen* v_screen){
     v_screen->set_text("Public domain  Free to use", 10, 215, 1, 1);
     v_screen->set_text("No attribution required :)", 10, 225, 1, 1);
 
+    v_screen->set_text("Press any button to return", 78, 208, 0, 1);
+
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     v_screen->update_text();
     v_screen->update_img(false);
     C3D_FrameEnd(0);
+
+    // Modal: wait for user to exit credits.
+    while (aptMainLoop()) {
+        hidScanInput();
+        if (hidKeysDown() & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_START)) {
+            break;
+        }
+        gspWaitForVBlank();
+    }
 }
 
 
@@ -366,6 +377,7 @@ int handle_menu_input(Virtual_Screen* v_screen, Input_Manager_3ds* input_manager
         return false;
     };
 
+
     const uint8_t cur_mfr = get_mfr(index_game);
 
     // Remember the last selected index per manufacturer while navigating the menu.
@@ -466,7 +478,6 @@ int handle_menu_input(Virtual_Screen* v_screen, Input_Manager_3ds* input_manager
         return 2; // Go to settings
     }
 
-    // No credit entry in manufacturer-grouped mode.
     if(index_game >= get_nb_name()){ return 0; }
 
     // Use kDown for action buttons to only trigger once per press
@@ -645,11 +656,12 @@ void update_settings_display(Virtual_Screen* v_screen) {
     v_screen->set_text(alpha_text, text_offset_x, 90, 0, 1);
     
     // Instructions
-    v_screen->set_text("UP/DOWN: Select setting", text_offset_x, 150, 1, 1);
-    v_screen->set_text("LEFT/RIGHT: Change value", text_offset_x, 160, 1, 1);
-    v_screen->set_text("A: Save & Return", text_offset_x, 180, 1, 1);
-    v_screen->set_text("B: Cancel", text_offset_x, 190, 1, 1);
-    v_screen->set_text("X: Reset to defaults", text_offset_x, 200, 1, 1);
+    v_screen->set_text("UP/DOWN: Select setting", text_offset_x, 140, 1, 1);
+    v_screen->set_text("LEFT/RIGHT: Change value", text_offset_x, 150, 1, 1);
+    v_screen->set_text("A: Save & Return", text_offset_x, 170, 1, 1);
+    v_screen->set_text("B: Cancel", text_offset_x, 180, 1, 1);
+    v_screen->set_text("X: Reset to defaults", text_offset_x, 190, 1, 1);
+    v_screen->set_text("Y: Credits", text_offset_x, 210, 1, 1);
     
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
     v_screen->update_text();
@@ -724,6 +736,13 @@ bool handle_settings_input(Virtual_Screen* v_screen, Input_Manager_3ds* input_ma
     // Reset to defaults
     if (input_manager->input_justPressed(KEY_X)) {
         reset_settings_to_default();
+        update_settings_display(v_screen);
+        sleep_us_p(200000);
+    }
+
+    // Credits
+    if (input_manager->input_justPressed(KEY_Y)) {
+        update_credit(v_screen);
         update_settings_display(v_screen);
         sleep_us_p(200000);
     }
