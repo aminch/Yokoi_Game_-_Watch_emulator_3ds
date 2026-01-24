@@ -70,18 +70,31 @@ def extract_group_segs(svg_path_list, output_dir, INKSCAPE_PATH, export_dpi: int
         if segs_group is None:
             print("ERROR NOT FIND SEG GROUP IN SVG")
             return
-        tx, ty = extract_translation(segs_group.attrib.get('transform', ''))    
-        
+        # Detect problematic matrix transform (e.g., matrix(0.1,0,0,-0.1,0,1053))
+        segs_transform = segs_group.attrib.get('transform', '')
+        if 'matrix' in segs_transform:
+            print(f"Detected matrix transform on segs group in {svg_path}. Moving transform to each segment.")
+            # Move the matrix transform to each child element
+            for element in segs_group:
+                orig = element.attrib.get('transform', '')
+                # Prepend the segs_group matrix to the element's transform
+                if orig:
+                    element.attrib['transform'] = segs_transform + ' ' + orig
+                else:
+                    element.attrib['transform'] = segs_transform
+            segs_group.attrib['transform'] = ''
+            tx, ty = 0.0, 0.0
+        else:
+            tx, ty = extract_translation(segs_transform)
+
         compteur = 1
         for element in segs_group:
             title_elem = element.find('svg:title', ns)
             if title_elem is not None and title_elem.text:
                 nom_base = title_elem.text.strip() + '.' + str(i_path) 
                 png_path = os.path.join(output_dir, f'{nom_base}.png')
-                
                 if not os.path.exists(png_path):
                     new_svg = etree.Element(root.tag, nsmap=root.nsmap)
-                    
                     for attr in ['width', 'height', 'viewBox']:
                         if attr == 'viewBox' and attr in root.attrib:
                             vb = root.attrib[attr].split()
@@ -91,18 +104,14 @@ def extract_group_segs(svg_path_list, output_dir, INKSCAPE_PATH, export_dpi: int
                             new_svg.attrib[attr] = f"{min_x} {min_y} {w} {h}"
                         elif attr in root.attrib:
                             new_svg.attrib[attr] = root.attrib[attr]
-                                
                     clone = etree.Element(element.tag, nsmap=element.nsmap)
                     clone.attrib.update(element.attrib)
                     for child in element: 
                         clone.append(child)
                     new_svg.append(clone)
-
                     svg_temp_path = os.path.join(output_dir, f'{nom_base}.svg')
-
                     with open(svg_temp_path, 'wb') as f: 
                         f.write(etree.tostring(new_svg, pretty_print=True))
-                    
                     export_commands.append((svg_temp_path, png_path))
                     compteur += 1
 
@@ -160,4 +169,3 @@ def extract_group_segs(svg_path_list, output_dir, INKSCAPE_PATH, export_dpi: int
                     os.remove(svg_path)
                 except:
                     pass
-                

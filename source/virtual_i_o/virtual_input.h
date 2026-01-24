@@ -36,7 +36,26 @@ class Virtual_Input {
         Virtual_Input(SM5XX* c) : cpu(c) {}   
         virtual ~Virtual_Input() = default; 
         virtual void set_input(uint8_t, uint8_t, bool, uint8_t = 1){};
+
     protected : 
+        // Important: If multiple physical buttons map to the same K bit ("Down").
+        // We must OR them together; otherwise an unpressed button will clear the bit
+        // each frame and the game will never see it.
+        struct OrKBit {
+            bool primary_held = false;
+            bool secondary_held = false;
+
+            void set_primary(SM5XX* cpu, int group, int line, bool pressed) {
+                primary_held = pressed;
+                cpu->input_set(group, line, primary_held || secondary_held);
+            }
+
+            void set_secondary(SM5XX* cpu, int group, int line, bool pressed) {
+                secondary_held = pressed;
+                cpu->input_set(group, line, primary_held || secondary_held);
+            }
+        };
+
         SM5XX* cpu;
 };
 
@@ -471,6 +490,66 @@ class FR_27 : public Virtual_Input{
             }
         }
 };
+
+/////// Space Mission / Spider SM_11/SG_21 : SM5A //////
+class SM_11 : public Virtual_Input{
+    public : 
+        SM_11(SM5XX* c) : Virtual_Input(c) {
+            left_configuration = CONF_1_BUTTON_ACTION;
+            right_configuration = CONF_1_BUTTON_ACTION;
+        }
+
+        void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
+            switch (part) {
+                case PART_SETUP:
+                    switch (button) {
+                        case BUTTON_TIME: cpu->input_set(3, 0, state); break;
+                        case BUTTON_GAMEB: cpu->input_set(3, 1, state); break;                        
+                        case BUTTON_GAMEA: cpu->input_set(3, 2, state); break;
+                        default: break; } break;
+                case PART_LEFT:
+                    switch (button) {
+                        case BUTTON_ACTION: cpu->input_set(0, 9, !state); break;
+                        default: break; } break;
+                case PART_RIGHT:
+                    switch (button) {
+                        case BUTTON_ACTION: cpu->input_set(0, 8, !state); break;
+                        default: break; } break;
+                default: break;
+            }
+        }
+}; 
+
+////// Super Goal Keeper SK_10 : SM5A //////
+/*class SK_10 : public Virtual_Input{
+    public : 
+        SK_10(SM5XX* c) : Virtual_Input(c) {
+            left_configuration = CONF_2_BUTTON_UPDOWN;
+            right_configuration = CONF_2_BUTTON_UPDOWN;
+        }
+
+        void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
+            switch (part) {
+                case PART_SETUP:
+                    switch (button) {
+                        case BUTTON_GAMEA: cpu->input_set(2, 2, state); break;
+                        case BUTTON_GAMEB: cpu->input_set(2, 1, state); break;
+                        case BUTTON_TIME: cpu->input_set(2, 0, state); break;
+                        default: break; } break;
+                case PART_LEFT:
+                    switch (button) {
+                        case BUTTON_UP: cpu->input_set(1, 3, !state); break;
+                        case BUTTON_DOWN: cpu->input_set(1, 2, !state); break;
+                        default: break; } break;
+                case PART_RIGHT:
+                    switch (button) {
+                        case BUTTON_UP: cpu->input_set(1, 1, !state); break;
+                        case BUTTON_DOWN: cpu->input_set(1, 0, !state); break;
+                        default: break; } break;
+                default: break;
+            }
+        }
+};*/
 
 ////// Turtle Bridge : SM10 //////
 class TL_28 : public Virtual_Input{
@@ -1552,9 +1631,7 @@ class MG_8 : public Virtual_Input{
             switch (part) {
                 case PART_SETUP:
                     switch (button) {
-                        case BUTTON_GAMEA: cpu->input_set(7, 0, state); break;
-                        case BUTTON_ALARM: cpu->input_set(7, 1, state); break;
-                        case BUTTON_ACL: cpu->input_set(7, 2, state); break;
+                        case BUTTON_GAMEA: cpu->input_set(7, 0, state); break; // Mode
                         default: break; } break;
                 case PART_LEFT:
                     switch (button) {
@@ -1563,10 +1640,104 @@ class MG_8 : public Virtual_Input{
                         default: break; } break;
                 case PART_RIGHT:
                     switch (button) {
-                        case BUTTON_ACTION: cpu->input_set(6, 3, !state); break;
+                        case BUTTON_ACTION: cpu->input_set(6, 3, state); break;
                         default: break; } break;
                 default: break;
             }
+        }
+};
+
+////// Diver's Adventure : SM11 //////
+class DA_37 : public Virtual_Input{
+    public : 
+        DA_37(SM5XX* c) : Virtual_Input(c) {
+            left_configuration = CONF_1_BUTTON_ACTION;
+            right_configuration = CONF_2_BUTTON_UPDOWN;
+        }
+
+        void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
+            switch (part) {
+                case PART_SETUP:
+                    switch (button) {
+                        case BUTTON_TIME: cpu->input_set(1, 0, state); break;
+                        case BUTTON_GAMEB: cpu->input_set(1, 1, state); break;
+                        case BUTTON_GAMEA: cpu->input_set(1, 2, state); break;
+                        default: break; } break;
+                case PART_LEFT:
+                    switch (button) {
+                        case BUTTON_ACTION: cpu->input_set(0, 3, state); break;
+                        default: break; } break;
+                case PART_RIGHT:
+                    switch (button) {
+                        case BUTTON_UP: cpu->input_set(0, 0, state); break; 
+                        case BUTTON_DOWN: cpu->input_set(0, 1, state); break; 
+                        default: break; } break;
+                default: break;
+            }
+        }
+};
+
+
+////// Clever Chicken (Tronica) : SM11 //////
+class CC_38V : public Virtual_Input{
+    public : 
+        CC_38V(SM5XX* c) : Virtual_Input(c) {
+            // Based on MAME hh_sm510.cpp (trclchick): IN.0 uses Right/Left/Down (no Up).
+            left_configuration = CONF_4_BUTTON_DIRECTION;
+            right_configuration = CONF_4_BUTTON_DIRECTION;
+        }
+
+        void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
+            switch (part) {
+                case PART_SETUP:
+                    switch (button) {
+                        case BUTTON_TIME: cpu->input_set(1, 0, state); break;
+                        case BUTTON_GAMEB: cpu->input_set(1, 1, state); break;
+                        case BUTTON_GAMEA: cpu->input_set(1, 2, state); break;
+                        default: break; } break;
+                case PART_LEFT:
+                    switch (button) {
+                        case BUTTON_UP: down.set_primary(cpu, 0, 3, state); break;  // D-pad Up -> DOWN input
+                        case BUTTON_DOWN: cpu->input_set(0, 1, state); break;        // LEFT input
+                        default: break; } break;
+                case PART_RIGHT:
+                    switch (button) {
+                        case BUTTON_UP: down.set_secondary(cpu, 0, 3, state); break; // X -> DOWN input
+                        case BUTTON_DOWN: cpu->input_set(0, 0, state); break;      // RIGHT input
+                        default: break; } break;
+                default: break;
+            }
+        }
+
+    private:
+        OrKBit down;
+};
+
+////// Space Rescue / Thunder Ball MG_9/FR_23 : SM11 //////
+class MG_9 : public Virtual_Input{
+    public : 
+        MG_9(SM5XX* c) : Virtual_Input(c) {
+            left_configuration = CONF_1_BUTTON_ACTION;
+            right_configuration = CONF_1_BUTTON_ACTION;
+        }
+
+        void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
+            switch (part) {
+                case PART_SETUP:
+                    switch (button) {
+                        case BUTTON_TIME: cpu->input_set(1, 3, state); break;
+                        case BUTTON_GAMEB: cpu->input_set(1, 1, state); break;                        
+                        case BUTTON_GAMEA: cpu->input_set(1, 2, state); break;
+                        default: break; } break;
+                case PART_LEFT:
+                    switch (button) {
+                        case BUTTON_ACTION: cpu->input_set(0, 3, state); break;
+                        default: break; } break;
+                case PART_RIGHT:
+                    switch (button) {
+                        case BUTTON_ACTION: cpu->input_set(0, 0, state); break;
+                        default: break; } break;
+                default: break;            }
         }
 };
 
@@ -1623,10 +1794,33 @@ class BX_301 : public Virtual_Input{
         }
 };
 
+/////// Space Adventure SA_12 : SM11 //////
+class SA_12 : public Virtual_Input{
+    public : 
+        SA_12(SM5XX* c) : Virtual_Input(c) {
+            left_configuration = CONF_2_BUTTON_UPDOWN;
+            right_configuration = CONF_1_BUTTON_ACTION;
+        }
 
-
-
-
+        void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
+            switch (part) {
+                case PART_SETUP:
+                    switch (button) {
+                        case BUTTON_GAMEA: cpu->input_set(7, 0, state); break; // Mode
+                        default: break; } break;
+                case PART_LEFT:
+                    switch (button) {
+                        case BUTTON_UP: cpu->input_set(5, 2, state); break; // JOYSTICK_RIGHT
+                        case BUTTON_DOWN: cpu->input_set(5, 0, state); break; // Left/Sound
+                        default: break; } break;
+                case PART_RIGHT:
+                    switch (button) {
+                        case BUTTON_ACTION: cpu->input_set(5, 1, state); break; // Fire
+                        default: break; } break;
+                default: break;
+            }
+        }
+};
 
 
 
@@ -1650,6 +1844,8 @@ inline Virtual_Input* get_input_config(SM5XX* cpu, std::string ref_game){
     else if (ref_game == "FP_24") { return new FP_24(cpu); } // Chef
     else if (ref_game == "MC_25"|| ref_game == "EG_26") { return new MC_25(cpu); } // Mickey Mouse / Egg
     else if (ref_game == "FR_27") { return new FR_27(cpu); } // Fire (Wide Screen)
+    else if (ref_game == "SM_11"|| ref_game == "SG_21") { return new SM_11(cpu); } // Space Mission / Spider (Tronica)
+    //else if (ref_game == "SK_10") { return new SK_10(cpu); } // Super Goal Keeper (Tronica)
 
     /* SM510 */
     else if (ref_game == "TL_28") { return new TL_28(cpu); } // Turtle Bridge
@@ -1671,6 +1867,9 @@ inline Virtual_Input* get_input_config(SM5XX* cpu, std::string ref_game){
     else if (ref_game == "BU_201") { return new BU_201(cpu); } // Spitball Sparky
     else if (ref_game == "UD_202") { return new UD_202(cpu); } // Crab Grab
     else if (ref_game == "MG_8" || ref_game == "TG_18")   { return new MG_8(cpu); }   // Shuttle Voyage / Thief in Garden (Tronica)
+    else if (ref_game == "DA_37")   { return new DA_37(cpu); }   // Diver's Adventure (Tronica)
+    else if (ref_game == "CC_38V")  { return new CC_38V(cpu); }  // Clever Chicken (Tronica)
+    else if (ref_game == "MG_9" || ref_game == "FR_23") { return new MG_9(cpu); } // Space Rescue / Thunder Ball (Tronica)
     
 
     /* SM511/SM512 */
@@ -1691,7 +1890,7 @@ inline Virtual_Input* get_input_config(SM5XX* cpu, std::string ref_game){
     else if (ref_game == "BF_803" || ref_game == "BF_107") { return new BF_803(cpu); } // Balloon Fight
     else if (ref_game == "MB_108") { return new MB_108(cpu); } // Mario The Juggler
     else if (ref_game == "BX_301" || ref_game == "AK_302" || ref_game == "HK_303") { return new BX_301(cpu); } // all vs g&w (3)
+    else if (ref_game == "SA_12") { return new SA_12(cpu); } // Space Adventure (Tronica)
     
     return nullptr;
 }
-

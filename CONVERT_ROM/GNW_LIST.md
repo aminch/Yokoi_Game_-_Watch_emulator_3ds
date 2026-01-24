@@ -87,4 +87,11 @@ Special editions are not supported in the emulator, refer to the Notes column fo
 | No. | Model   | Filename            | Game Title                                                   | Release Date | CPU |
 |-----|---------|---------------------|--------------------------------------------------------------|--------------|-----|
 | 01  | TG-18   | tigarden.zip        | Thief in Garden                                              | 1983.01.01   | SM510 |
-| 02  | MG-8    | trshutvoy.zip       | Shuttle Voyage                                               | 1983.01.01   | SM510 |
+| 02  | CC-38V  | trclchick.zip       | Clever Chicken                                               | 1983.01.01   | SM510 |
+| 03  | DA-37   | trdivadv.zip        | Diver's Adventure                                            | 1983.01.01   | SM510 |
+| 04  | MG-8    | trshutvoy.zip       | Shuttle Voyage                                               | 1983.01.01   | SM510 |
+| 05  | SA-12   | trspacadv.zip       | Space Adventure                                              | 1982.01.01   | SM511 |
+| 06  | SM-11   | trspacmis.zip       | Space Mission (Tronica)                                      | 1982.01.01   | SM5A |
+| 07  | SG-21   | trspider.zip        | Spider (Tronica)                                             | 1982.01.01   | SM5A |
+| 08  | MG-9    | trsrescue.zip       | Space Rescue                                                 | 1982.01.01   | SM510 |
+| 09  | FR-23   | trthuball.zip       | Thunder Ball (Tronica)                                       | 1983.01.01   | SM510 |
