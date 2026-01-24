@@ -212,25 +212,27 @@ def segment_text(all_img, name, color_segment:bool = False):
 
 
 def find_best_parquet(rects: list):
-    atlas_size = None
-    best_area = float("inf")
-    best_packer = None
-    
+    # Heuristic: try candidate bins from smallest area to largest, and return
+    # the first that fits. Python's sort is stable, so ties preserve original
+    # (w,h) iteration order.
+    candidates: list[tuple[int, int]] = []
     for w in size_altas_check:
         for h in size_altas_check:
-            packer = newPacker(rotation=False)
-            for rect in rects: packer.add_rect(*rect)
-            packer.add_bin(w, h)
-            packer.pack()
-            abin = next(iter(packer))
-            used_rects = len(list(abin))
-            if used_rects == len(rects):  # toutes placées
-                area = w * h
-                if area < best_area:
-                    best_area = area
-                    atlas_size = (w, h)
-                    best_packer = packer  
-    return best_packer, atlas_size
+            candidates.append((int(w), int(h)))
+    candidates.sort(key=lambda wh: wh[0] * wh[1])
+
+    for w, h in candidates:
+        packer = newPacker(rotation=False)
+        for rect in rects:
+            packer.add_rect(*rect)
+        packer.add_bin(w, h)
+        packer.pack()
+        abin = next(iter(packer))
+        used_rects = len(list(abin))
+        if used_rects == len(rects):
+            return packer, (w, h)
+
+    return None, None
 
 
 def visual_data_file(name, size_list, background_path_list, rotate = False, mask = False, color_segment = False, two_in_one_screen = False, transform = []):
