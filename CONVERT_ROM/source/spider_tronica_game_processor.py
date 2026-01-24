@@ -14,6 +14,10 @@ class SpiderTronicaGameProcessor(GameProcessor):
 	def post_process(self):
 		updater = GamesPathUpdater(self.target_name)
 		target = updater.get_target(self.game_key)
+		game_folder = target.background_paths[0].parent
+
+		# Create the background by combining all the layers
+		target.background_paths = self.combine_background_paths(target.background_paths[0], game_folder / "BackgroundTop.png", mode="normal")
 
 		# Set custom values
 		target.alpha_bright = 1.2
