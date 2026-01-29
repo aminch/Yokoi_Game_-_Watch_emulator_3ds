@@ -117,4 +117,5 @@ Special editions are not supported in the emulator, refer to the Notes column fo
 | 14  | IM-03   | taynyoke.zip        | Tayny okeana                                                 | 1988.01.01   | SM5A | gnw_octopus |
 | 15  | IM-04   | vespovar.zip        | Vesyolyy povar                                               | 1989.01.01   | SM5A | gnw_chef |
 | 16  | IM-22   | vfutbol.zip         | Vesyolye futbolisty                                          | 1989.01.01   | SM5A | gnw_mmouse |
-| 17  | IM-12   | vinnpukh.zip        | Vinni-Pukh                                                   | 199?         | SM511 | gnw_dkjrp |
+| 17  | IM-12   | vinnpukh.zip        | Vinni-Pukh (Panorama Screen)                                 | 199?         | SM511 | gnw_dkjrp | 
+| 01  | IM-23   | auslalom.zip        | Autoslalom                                                   | 1990.01.01   | SM5A |  |
