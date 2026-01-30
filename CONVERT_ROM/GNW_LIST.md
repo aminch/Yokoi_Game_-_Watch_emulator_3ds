@@ -103,19 +103,19 @@ Special editions are not supported in the emulator, refer to the Notes column fo
 |-----|---------|---------------------|--------------------------------------------------------------|--------------|-----|-------|
 | 01  | IM-53   | atakaast.zip        | Ataka asteroidov                                             | 1992.01.01   | SM5A | gnw_mmouse |
 | 02  | IM-19   | biathlon.zip        | Biathlon                                                     | 1989.01.01   | SM5A | gnw_mmouse |
-| 03  | ECIRCUS | ecircus.zip         | Circus (Elektronika)                                         | 19??         | SM5A | gnw_mmouse |
+| 03  | IM-11   | ecircus.zip         | Circus (Elektronika)                                         | 1993.01.01   | SM5A | gnw_mmouse |
 | 04  | IM-10   | ehockey.zip         | Hockey (Elektronika)                                         | 1988.01.01   | SM5A | gnw_mmouse |
 | 05  | IM-09   | kosmicmt.zip        | Kosmicheskiy most                                            | 1989.01.01   | SM5A | gnw_fire |
-| 06  | IM-50   | kosmicpt.zip        | Kosmicheskiy polyot                                          | 19??         | SM5A | gnw_mmouse |
+| 06  | IM-50   | kosmicpt.zip        | Kosmicheskiy polyot                                          | 1992.01.01   | SM5A | gnw_mmouse |
 | 07  | IM-32   | krybolov.zip        | Kot-rybolov (Elektronika)                                    | 1989.01.01   | SM5A | gnw_mmouse |
 | 08  | IM-33   | kvakazad.zip        | Kvaka-zadavaka                                               | 1989.01.01   | SM5A | gnw_mmouse |
-| 09  | IM-51   | morataka.zip        | Morskaja ataka                                               | 19??         | SM5A | gnw_mmouse |
-| 10  | IM-49   | nochnyev.zip        | Nochnye vorishki                                             | 19??         | SM5A | gnw_mmouse |
+| 09  | IM-51   | morataka.zip        | Morskaja ataka                                               | 1992.01.01   | SM5A | gnw_mmouse |
+| 10  | IM-49   | nochnyev.zip        | Nochnye vorishki                                             | 1993.01.01   | SM5A | gnw_mmouse |
 | 11  | IM-02   | nupogodi.zip        | Nu, pogodi!                                                  | 1983.01.01   | SM5A | gnw_mmouse |
 | 12  | IM-16   | okhota.zip          | Okhota                                                       | 1989.01.01   | SM5A | gnw_mmouse |
 | 13  | IM-13   | rkosmosa.zip        | Razvedchiki kosmosa                                          | 1989.01.01   | SM5A | gnw_mmouse |
 | 14  | IM-03   | taynyoke.zip        | Tayny okeana                                                 | 1988.01.01   | SM5A | gnw_octopus |
 | 15  | IM-04   | vespovar.zip        | Vesyolyy povar                                               | 1989.01.01   | SM5A | gnw_chef |
 | 16  | IM-22   | vfutbol.zip         | Vesyolye futbolisty                                          | 1989.01.01   | SM5A | gnw_mmouse |
-| 17  | IM-12   | vinnpukh.zip        | Vinni-Pukh (Panorama Screen)                                 | 199?         | SM511 | gnw_dkjrp | 
+| 17  | IM-12   | vinnpukh.zip        | Vinni-Pukh (Panorama Screen)                                 | 1990.01.01   | SM511 | gnw_dkjrp | 
 | 01  | IM-23   | auslalom.zip        | Autoslalom                                                   | 1990.01.01   | SM5A |  |

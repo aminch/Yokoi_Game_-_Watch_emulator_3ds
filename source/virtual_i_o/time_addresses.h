@@ -41,7 +41,7 @@ inline const TimeAddress* get_time_addresses(const std::string& ref_game) {
         {"EG_26", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Egg
         {"IM_53", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Ataka asteroidov
         {"IM_19", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Biathlon 
-        {"ECIRCUS", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Circus 
+        {"IM_11", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Circus 
         {"IM_10", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Hockey 
         {"IM_50", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Kosmicheskiy polyot 
         {"IM_32", {2,4, 2,5, 2,6, 2,7, 2,8, 2,9, 2}}, // Kot-rybolov 
