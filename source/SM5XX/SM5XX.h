@@ -75,6 +75,7 @@ public:
     void time_set(bool state){ time_set_state = state; }
     bool is_time_set(){ return time_set_state; }
     void set_time(uint8_t hour, uint8_t minute, uint8_t second);
+    void set_input_multiplexage(bool use_multiplexage = true){ input_no_multiplex = !use_multiplexage; };
 
 private : 
     void adding_program_counter(const uint8_t* opcode);
@@ -240,4 +241,5 @@ public :
     virtual uint8_t debug_w_prime_screen(int){ return 0x00; }
     virtual uint8_t debug_CN_Flag(){ return 0x00; }
 
+    virtual std::string debug_opcode_trad(){ return ""; }
 };

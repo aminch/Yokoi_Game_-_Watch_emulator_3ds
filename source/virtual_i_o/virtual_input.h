@@ -27,11 +27,21 @@ constexpr uint8_t BUTTON_UP = 0x40;
 constexpr uint8_t BUTTON_DOWN = 0x50;
 
 
+/*
+    Multiplexage explain : 
+    
+
+
+*/
+
+
+
 class Virtual_Input {
     public : 
         uint8_t left_configuration = CONF_NOTHING;
         uint8_t right_configuration = CONF_NOTHING;
         bool two_player = false;
+        bool use_multiplexage = true;
 
         Virtual_Input(SM5XX* c) : cpu(c) {}   
         virtual ~Virtual_Input() = default; 
@@ -68,6 +78,7 @@ class AC_01 : public Virtual_Input{
         AC_01(SM5XX* c) : Virtual_Input(c) {
             left_configuration = CONF_1_BUTTON_ACTION;
             right_configuration = CONF_1_BUTTON_ACTION;
+            use_multiplexage = false;
         }
 
         void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
@@ -130,6 +141,7 @@ class MT_03 : public Virtual_Input{
         MT_03(SM5XX* c) : Virtual_Input(c) {
             left_configuration = CONF_1_BUTTON_ACTION;
             right_configuration = CONF_1_BUTTON_ACTION;
+            use_multiplexage = false;
         }
 
         void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
@@ -160,6 +172,7 @@ class RC_04 : public Virtual_Input{
         RC_04(SM5XX* c) : Virtual_Input(c) {
             left_configuration = CONF_1_BUTTON_ACTION;
             right_configuration = CONF_1_BUTTON_ACTION;
+            use_multiplexage = false;
         }
 
         void set_input(uint8_t part, uint8_t button, bool state, uint8_t player = 1) override{
@@ -532,19 +545,19 @@ class SK_10 : public Virtual_Input{
             switch (part) {
                 case PART_SETUP:
                     switch (button) {
-                        case BUTTON_GAMEA: cpu->input_set(2, 2, state); break;
-                        case BUTTON_GAMEB: cpu->input_set(2, 1, state); break;
-                        case BUTTON_TIME: cpu->input_set(2, 0, state); break;
+                        case BUTTON_GAMEA: cpu->input_set(3, 2, state); break;
+                        case BUTTON_GAMEB: cpu->input_set(3, 1, state); break;
+                        case BUTTON_TIME: cpu->input_set(3, 0, state); break;
                         default: break; } break;
                 case PART_LEFT:
                     switch (button) {
-                        case BUTTON_UP: cpu->input_set(3, 3, state); break;
-                        case BUTTON_DOWN: cpu->input_set(3, 2, state); break;
+                        case BUTTON_UP: cpu->input_set(2, 3, state); break;
+                        case BUTTON_DOWN: cpu->input_set(2, 2, state); break;
                         default: break; } break;
                 case PART_RIGHT:
                     switch (button) {
-                        case BUTTON_UP: cpu->input_set(3, 1, state); break;
-                        case BUTTON_DOWN: cpu->input_set(3, 0, state); break;
+                        case BUTTON_UP: cpu->input_set(2, 1, state); break;
+                        case BUTTON_DOWN: cpu->input_set(2, 0, state); break;
                         default: break; } break;
                 default: break;
             }

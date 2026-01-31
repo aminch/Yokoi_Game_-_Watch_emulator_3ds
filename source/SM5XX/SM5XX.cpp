@@ -179,23 +179,57 @@ void SM5XX::copy_buffer(const ProgramCounter& src, ProgramCounter& dst) {
 
 std::string SM5XX::debug_var_cpu(){
     std::ostringstream oss;
-    oss << "Acc : " ;
-    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(accumulator);
+    oss << name_cpu ;
+    oss << "(" ;
+    oss << "(" ;
 
-    oss << "(K input : " ;
+    oss << "Acc: " ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(accumulator);
+    oss << " - Carry: " ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(carry);
+    
+    oss << "(" ;
+
+    oss << "(K input: " ;
     for(int i = 0; i < 8; i++){
         oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(k_input[i]);
         oss << " ";
     }
 
-    oss << "(Input read during op code : " ;
+    oss << "(Input read during op code: " ;
     oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(debug_value_read_input);
     
-    oss << "(Multiplexage during op code : " ;
+    oss << "(Multiplexage during op code: " ;
     oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(debug_multiplexage_activate);
 
+    
+    oss << "(" ;
+    oss << "(Current Op code : " ;
+    oss << std::hex << std::uppercase << std::setw(4) << std::setfill('0') << static_cast<int>(debug_curr_opcode);
+    oss << " - " << debug_opcode_trad();
+
+    oss << "(Program counter: " ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(program_counter.col);
+    oss << ":" ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(program_counter.line);
+    oss << ":" ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(program_counter.word);
+    oss << "(buffer Prog. count.: " ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(s_buffer_program_counter.col);
+    oss << ":" ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(s_buffer_program_counter.line);
+    oss << ":" ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(s_buffer_program_counter.word);
+    oss << "(Ram Address: " ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(ram_address.col);
+    oss << ":" ;
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(ram_address.line);
+    oss << " - " ;    
+    oss << std::hex << std::uppercase << std::setw(2) << std::setfill('0') << static_cast<int>(read_ram_value());
+
     return oss.str();
-}
+}      
+
 
 
 void SM5XX::debug_dump_ram_state(const char* filename) {
