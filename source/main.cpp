@@ -38,6 +38,7 @@
 
 const float _3DS_FPS_SCREEN_ = 60;
 const int _INPUT_SETTING_ = (KEY_L|KEY_B);
+const int _INPUT_DEBUG_ = (KEY_L|KEY_X);
 const int _INPUT_SETTING_OTHER_ = (KEY_ZL|KEY_ZR);
 
 const int _INPUT_MENU_ = (KEY_L|KEY_R);
@@ -45,7 +46,15 @@ const int _INPUT_MENU_ = (KEY_L|KEY_R);
 const uint64_t _TIME_MOVE_MENU_ = 400000;
 const uint64_t _TIME_MOVE_VALUE_SETTING_ = 300000;
 
+enum GameState {
+    STATE_MENU,
+    STATE_PLAY,
+    STATE_SETTINGS,
+    STATE_SAVE_PROMPT,
+    STATE_DEBUG
+};
 
+bool debug_run_op_press = false;
 
 uint8_t index_game = 0;
 
@@ -243,11 +252,15 @@ void update_name_game_top(Virtual_Screen* v_screen, bool for_choose = true){
 
     v_screen->delete_all_text();
 
+    int16_t hx = 196;
     if (!mfr.empty()) {
         // Small header above the title.
-        const int16_t hx = (400 - (int16_t)(mfr.length() * 8)) / 2;
+        hx = (400 - (int16_t)(mfr.length() * 8)) / 2;
         v_screen->set_text(mfr, hx, 18, 0, 1);
     }
+    // Arrows
+    v_screen->set_text("^", hx-10, 13, 0, 1);
+    v_screen->set_text("*", hx-10, 21, 0, 1);
     
     // Check if text contains brackets for two-line display
     std::string line1 = text;
@@ -623,6 +636,7 @@ bool init_game(SM5XX** cpu, Virtual_Screen* v_screen, Virtual_Sound* v_sound, Vi
         show_start_game_error(*v_screen, "Input config missing");
         return false;
     }
+    (*cpu)->set_input_multiplexage((*v_input)->use_multiplexage);
     YOKOI_LOG("init_game: input config ok (%p)", (const void*)*v_input);
 
     set_time_cpu(*cpu);
@@ -637,12 +651,6 @@ bool init_game(SM5XX** cpu, Virtual_Screen* v_screen, Virtual_Sound* v_sound, Vi
 
 
 
-enum GameState {
-    STATE_MENU,
-    STATE_PLAY,
-    STATE_SETTINGS,
-    STATE_SAVE_PROMPT
-};
  
 
 // Settings UI state
@@ -960,7 +968,18 @@ int main()
                     uint32_t step = curr_rate/_3DS_FPS_SCREEN_;
                     curr_rate -= step*_3DS_FPS_SCREEN_;
 
-                    while(step > 0) { 
+                    #if defined(YOKOI_DEBUG)
+                        bool only_one_frame = false;
+                        if(debug_run_op_press){
+                            uint32_t speed = 200000;
+                            if(input_manager.input_isHeld(KEY_DDOWN)) { speed = 30000; }
+                            if(input_manager.input_Held_Increase(KEY_R, speed)){ only_one_frame = true; }
+                            else {step = 0; } // no execute
+                        }
+                    #endif
+
+
+                    while(step > 0) {
                         if(cpu->step()) { 
                             // Only set time for the first few cycles after game start, otherwise the CPU
                             // won't set the correct initial time from the 3DS RTC.
@@ -971,6 +990,9 @@ int main()
                                 set_time_cpu(cpu);
                             }
                             v_screen.update_buffer_video(cpu); 
+                            #if defined(YOKOI_DEBUG)
+                                if(debug_run_op_press && only_one_frame){ step = 1; }
+                            #endif
                         }
                         v_sound.update_sound(cpu); 
                         step -= 1;
@@ -1016,6 +1038,14 @@ int main()
                         sleep_us_p(200000); // Debounce
                         cpu->time_set(false); // Reset time set flag
                     }
+
+                    #if defined(YOKOI_DEBUG)
+                    else if(input_manager.input_isHeld(_INPUT_DEBUG_)){
+                        debug_run_op_press = !debug_run_op_press;
+                        sleep_us_p(200000); // Debounce
+                    }
+                    #endif
+
                 }
                 break;
             case STATE_SETTINGS:

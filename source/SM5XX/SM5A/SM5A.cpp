@@ -125,6 +125,7 @@ void SM5A::wake_up(){
     is_sleep = false;
     program_counter = {0, 0, 0}; // Doc Sharp
     bp_lcd_blackplate = true; // start screen
+    cb_debordement_rom_program_counter = 0;
 }
 
 
