@@ -1,6 +1,8 @@
 #include "yokoi_audio.h"
 
+#if defined(__ANDROID__)
 #include <aaudio/AAudio.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -29,6 +31,7 @@ bool g_audio_curr_value = false;
 // ---------------------------
 // AAudio output (minSdk=26)
 // ---------------------------
+#if defined(__ANDROID__)
 std::mutex g_aaudio_mutex;
 AAudioStream* g_aaudio_stream = nullptr;
 std::atomic<bool> g_aaudio_running{false};
@@ -44,6 +47,7 @@ struct AAudioResamplerState {
 };
 
 AAudioResamplerState g_aaudio_rs;
+#endif
 
 static void audio_reset_locked() {
     std::fill(g_audio_ring.begin(), g_audio_ring.end(), 0);
@@ -97,6 +101,7 @@ static int audio_ring_read_locked(int16_t* out, int frames) {
     return got;
 }
 
+#if defined(__ANDROID__)
 static aaudio_data_callback_result_t aaudio_data_cb(AAudioStream* /*stream*/, void* /*userData*/, void* audioData, int32_t numFrames) {
     int16_t* out = reinterpret_cast<int16_t*>(audioData);
     if (!out || numFrames <= 0) {
@@ -251,6 +256,7 @@ static void aaudio_stop_stream_locked() {
     }
     g_aaudio_rs = AAudioResamplerState{};
 }
+#endif
 } // namespace
 
 void yokoi_audio_set_can_run(bool can_run) {
@@ -318,11 +324,15 @@ int yokoi_audio_read(int16_t* out, int frames) {
 }
 
 void yokoi_aaudio_start_stream() {
+#if defined(__ANDROID__)
     std::lock_guard<std::mutex> lock(g_aaudio_mutex);
     aaudio_start_stream_locked();
+#endif
 }
 
 void yokoi_aaudio_stop_stream() {
+#if defined(__ANDROID__)
     std::lock_guard<std::mutex> lock(g_aaudio_mutex);
     aaudio_stop_stream_locked();
+#endif
 }

@@ -1,0 +1,82 @@
+# Linux SDL build helper for Yokoi (intended to be run inside WSL2).
+#
+# Usage (from WSL):
+#   make -f Makefile.linux_sdl deps
+#   make -f Makefile.linux_sdl build
+#   make -f Makefile.linux_sdl run PACK=../CONVERT_ROM/yokoi_pack_rgds.ykp
+
+SHELL := /bin/sh
+
+# ---- configuration ----
+BUILD_TYPE ?= Release
+BUILD_DIR  ?= linux_sdl/build
+PACK       ?= ../CONVERT_ROM/yokoi_pack_rgds.ykp
+
+# Prefer Ninja if available.
+NINJA := $(shell command -v ninja 2>/dev/null)
+ifeq ($(strip $(NINJA)),)
+  CMAKE_GEN :=
+else
+  CMAKE_GEN := -G Ninja
+endif
+
+# ---- helpers ----
+UNAME_S := $(shell uname -s 2>/dev/null)
+
+.PHONY: help deps configure build run clean distclean print-env
+
+help:
+	@echo "Targets:"
+	@echo "  deps       Install build dependencies (Ubuntu/Debian via apt)"
+	@echo "  configure  Configure CMake in $(BUILD_DIR)"
+	@echo "  build      Build yokoi_sdl (BUILD_TYPE=$(BUILD_TYPE))"
+	@echo "  run        Build then run: PACK=$(PACK)"
+	@echo "  clean      Delete build output ($(BUILD_DIR))"
+	@echo ""
+	@echo "Run this makefile inside WSL2 (Linux)."
+
+print-env:
+	@echo "UNAME_S=$(UNAME_S)"
+	@echo "BUILD_TYPE=$(BUILD_TYPE)"
+	@echo "BUILD_DIR=$(BUILD_DIR)"
+	@echo "PACK=$(PACK)"
+	@echo "CMAKE_GEN=$(CMAKE_GEN)"
+
+# Ensure we're on Linux (WSL is fine; it reports Linux).
+check-linux:
+	@if [ "$(UNAME_S)" != "Linux" ]; then \
+		echo "ERROR: This build is for Linux/WSL. Open a WSL2 Ubuntu terminal and run:"; \
+		echo "  make -f Makefile.linux_sdl deps build"; \
+		exit 1; \
+	fi
+
+deps: check-linux
+	@if command -v apt-get >/dev/null 2>&1; then \
+		echo "Installing dependencies via apt (sudo required)..."; \
+		sudo apt-get update; \
+		sudo apt-get install -y \
+			build-essential cmake $(if $(NINJA),ninja-build,) pkg-config \
+			libsdl2-dev libpng-dev libegl1-mesa-dev libgles2-mesa-dev; \
+	else \
+		echo "ERROR: apt-get not found. Install deps manually:"; \
+		echo "  - CMake (>=3.16), a C++20 compiler, pkg-config"; \
+		echo "  - SDL2 development headers"; \
+		echo "  - libpng development headers"; \
+		echo "  - EGL + OpenGL ES (Mesa) development headers"; \
+		exit 1; \
+	fi
+
+configure: check-linux
+	@cmake -S linux_sdl -B "$(BUILD_DIR)" $(CMAKE_GEN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
+
+build: configure
+	@cmake --build "$(BUILD_DIR)" --config $(BUILD_TYPE)
+
+run: build
+	@"./$(BUILD_DIR)/yokoi_sdl" "$(PACK)"
+
+clean: check-linux
+	@rm -rf "$(BUILD_DIR)"
+
+distclean: clean
+	@rm -rf linux_sdl/build
